@@ -1,318 +1,43 @@
-import { createNovaPlan, prepareNovaMessages } from "../chat/nova-gateway";
+import {createNovaPlan,prepareNovaMessages} from "../chat/nova-gateway";
+import {requestNovaIntelligence} from "../chat/intelligence-gateway";
 
-export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
+export const runtime="nodejs";
+export const dynamic="force-dynamic";
 
-const OPENROUTER_URL = "https://openrouter.ai/api/v1";
-const BUILD_TIMEOUT_MS = 55_000;
-const MAX_BUILDER_TOOL_STEPS = 5;
-const DEFAULT_BUILDER_MODEL = "nex-agi/nex-n2.5-mini:free";
+type Msg={role:"user"|"assistant"|"system";content:string};
+type File={path:string;content:string};
+type Project={name:string;summary:string;files:File[];verification:{passed:boolean;checks:string[]}};
+type Existing={name:string;summary?:string;files:File[]};
 
-type IncomingMessage = {
-  role: "user" | "assistant" | "system";
-  content: string;
-};
-
-type ProjectFile = {
-  path: string;
-  content: string;
-};
-
-type ProjectPayload = {
-  name: string;
-  summary: string;
-  files: ProjectFile[];
-  verification?: { passed?: boolean; checks?: string[] };
-};
-
-type ExistingProject = {
-  name: string;
-  summary?: string;
-  files: ProjectFile[];
-};
-
-
-function env(name: string) {
-  return process.env[name]?.trim();
+function sanitize(x:unknown):Msg[]{if(!Array.isArray(x))return[];return x.filter((m):m is Msg=>!!m&&typeof m==="object"&&typeof(m as Msg).content==="string"&&["user","assistant","system"].includes((m as Msg).role)).slice(-20)}
+function extract(text:string):Project{
+ const fenced=text.match(/\`\`\`(?:json)?\s*([\s\S]*?)\s*\`\`\`/i),raw=fenced?.[1]||text,start=raw.indexOf("{"),end=raw.lastIndexOf("}");
+ if(start<0||end<=start)throw new Error("Builder returned invalid project JSON.");
+ const p=JSON.parse(raw.slice(start,end+1)) as Partial<Project>;
+ if(typeof p.name!=="string"||!Array.isArray(p.files))throw new Error("Builder returned an invalid project shape.");
+ const files=p.files.filter((f):f is File=>!!f&&typeof f==="object"&&typeof f.path==="string"&&typeof f.content==="string"&&!f.path.includes("..")&&!f.path.startsWith("/")).slice(0,12);
+ if(!files.some(f=>f.path==="index.html"))throw new Error("index.html is required.");
+ const checks=["JSON parsed successfully.","All paths are relative and contain no parent traversal.","index.html is present.",files.some(f=>f.path==="styles.css")?"styles.css is present.":"styles.css was not required.",files.some(f=>f.path==="app.js")?"app.js is present.":"app.js was not required."];
+ return {name:p.name.slice(0,80),summary:typeof p.summary==="string"?p.summary.slice(0,500):"",files,verification:{passed:Boolean(p.verification?.passed),checks}};
 }
-
-function safeUpstreamDetail(raw: string) {
-  const cleaned = raw.replace(/sk-[A-Za-z0-9_-]+/g, "[redacted-key]");
-  try {
-    const parsed = JSON.parse(cleaned);
-    const message =
-      parsed?.error?.message ||
-      parsed?.message ||
-      parsed?.error ||
-      cleaned;
-    return String(message).slice(0, 500);
-  } catch {
-    return cleaned.replace(/\s+/g, " ").slice(0, 500);
-  }
-}
-
-function upstreamFailure(status: number, detail: string, service: string) {
-  const known =
-    status === 401
-      ? "OpenRouter rejected the API key (401 Unauthorized)."
-      : status === 402
-        ? "OpenRouter rejected the request because the account/key has insufficient credits or budget (402)."
-        : status === 403
-          ? "OpenRouter rejected the request (403 Forbidden)."
-          : status === 429
-            ? "OpenRouter rate-limited the request (429)."
-            : status >= 500
-              ? "OpenRouter or the selected provider returned a server error."
-              : "OpenRouter rejected the request.";
-  const extra = safeUpstreamDetail(detail);
-  return `NOVA ${service} connection failed: ${known}${extra ? " Detail: " + extra : ""}`;
-}
-
-function sanitize(raw: unknown): IncomingMessage[] {
-  if (!Array.isArray(raw)) return [];
-  return raw
-    .filter(
-      (message): message is IncomingMessage =>
-        !!message &&
-        typeof message === "object" &&
-        typeof (message as IncomingMessage).content === "string" &&
-        ["user", "assistant", "system"].includes(
-          (message as IncomingMessage).role
-        )
-    )
-    .slice(-20);
-}
-
-function extractJson(text: string): ProjectPayload {
-  const fenced = text.match(/\`\`\`(?:json)?\s*([\s\S]*?)\s*\`\`\`/i);
-  const raw = fenced?.[1] || text;
-  const start = raw.indexOf("{");
-  const end = raw.lastIndexOf("}");
-  if (start < 0 || end <= start) throw new Error("Builder returned invalid project JSON.");
-
-  const parsed = JSON.parse(raw.slice(start, end + 1)) as ProjectPayload;
-  if (!parsed || typeof parsed.name !== "string" || !Array.isArray(parsed.files)) {
-    throw new Error("Builder returned an invalid project shape.");
-  }
-
-  const files = parsed.files
-    .filter(
-      (file): file is ProjectFile =>
-        !!file &&
-        typeof file === "object" &&
-        typeof file.path === "string" &&
-        typeof file.content === "string"
-    )
-    .slice(0, 12);
-
-  if (!files.some((file) => file.path === "index.html")) {
-    throw new Error("Builder did not produce an index.html entry point.");
-  }
-
-  return {
-    name: parsed.name.slice(0, 80),
-    summary: typeof parsed.summary === "string" ? parsed.summary.slice(0, 500) : "",
-    files,
-    verification: parsed.verification
-      ? {
-          passed: Boolean(parsed.verification.passed),
-          checks: Array.isArray(parsed.verification.checks)
-            ? parsed.verification.checks
-                .filter((check): check is string => typeof check === "string")
-                .slice(0, 20)
-            : [],
-        }
-      : undefined,
-  };
-}
-
-export async function POST(request: Request) {
-  const apiKey = env("OPENROUTER_API_KEY");
-  if (!apiKey) return new Response("NOVA's build connection is not configured.", { status: 503 });
-
-  try {
-    const body = (await request.json()) as { messages?: unknown; project?: unknown };
-    const messages = sanitize(body.messages);
-    if (!messages.length) return new Response("Tell NOVA what you want to build.", { status: 400 });
-
-    const existingProject: ExistingProject | null =
-      body.project &&
-      typeof body.project === "object" &&
-      Array.isArray((body.project as ExistingProject).files)
-        ? {
-            name: typeof (body.project as ExistingProject).name === "string"
-              ? (body.project as ExistingProject).name.slice(0, 80)
-              : "NOVA Project",
-            summary: typeof (body.project as ExistingProject).summary === "string"
-              ? ((body.project as ExistingProject).summary || "").slice(0, 500)
-              : "",
-            files: (body.project as ExistingProject).files
-              .filter(
-                (file): file is ProjectFile =>
-                  !!file &&
-                  typeof file === "object" &&
-                  typeof file.path === "string" &&
-                  typeof file.content === "string"
-              )
-              .slice(0, 12),
-          }
-        : null;
-
-    const plan = createNovaPlan(messages);
-    const builderModel = env("OPENROUTER_BUILDER_MODEL") || DEFAULT_BUILDER_MODEL;
-    const prepared = prepareNovaMessages(messages, Math.min(plan.contextMessages, 16));
-
-    const system = [
-      "You are NOVA's autonomous product builder.",
-      "You have a real isolated Linux workspace through the shell tool.",
-      existingProject
-        ? "Load the supplied existing files into /workspace before making changes, then validate the resulting project."
-        : "Build the project directly in /workspace.",
-      "Do not merely describe code. Build or modify the requested web application in /workspace.",
-      existingProject
-        ? "An existing project snapshot is supplied below. Treat it as the source of truth. Inspect it first, preserve working behavior, and modify only what the user's latest request requires."
-        : "Start a new project in /workspace.",
-      "Create index.html, styles.css and app.js. Add other files only when genuinely needed.",
-      "Run real validation after writing files. At minimum verify the files exist, HTML has a body, CSS is non-empty, and JavaScript parses with Node.",
-      "If validation fails, inspect the error, edit the files, and run validation again.",
-      "Never claim a test passed unless you actually ran it.",
-      "Keep the project self-contained and browser-runnable unless the user explicitly requests a framework or dependency.",
-      "Do not use external images, scripts, CSS frameworks, tracking, or remote dependencies unless explicitly requested.",
-      "Make the result polished, responsive, accessible, and interactive.",
-      "When finished, read the final files and return ONLY valid JSON.",
-      'Final JSON schema: {"name":"string","summary":"string","files":[{"path":"index.html","content":"string"},{"path":"styles.css","content":"string"},{"path":"app.js","content":"string"}],"verification":{"passed":true,"checks":["string"]}}',
-      "Include the exact final contents of every returned file.",
-      existingProject
-        ? "Return the complete updated project, including unchanged files, so NOVA can persist the new state."
-        : "Return the complete project so NOVA can persist it for future edits."
-    ].join("\n");
-
-    const upstream = await fetch(OPENROUTER_URL + "/responses", {
-      method: "POST",
-      headers: {
-        Authorization: "Bearer " + apiKey,
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://nova-gamma-mocha.vercel.app",
-        "X-Title": "NOVA Autonomous Project Builder"
-      },
-      signal: AbortSignal.timeout(BUILD_TIMEOUT_MS),
-      body: JSON.stringify({
-        model: builderModel,
-        input: [
-          { role: "system", content: [{ type: "input_text", text: system }] },
-          {
-            role: "user",
-            content: [{
-              type: "input_text",
-              text: [
-                prepared.map((message) => message.role.toUpperCase() + ": " + message.content).join("\n\n"),
-                existingProject
-                  ? "\n\nEXISTING PROJECT SNAPSHOT:\n" + JSON.stringify(existingProject)
-                  : ""
-              ].join("")
-            }]
-          }
-        ],
-        tools: [{
-          type: "openrouter:shell",
-          parameters: {
-            engine: "openrouter",
-            timeout_ms: 20000,
-            max_output_length: 16000
-          }
-        }],
-        ...(plan.fallbackModels.length ? { models: plan.fallbackModels } : {}),
-        max_output_tokens: 14000,
-        max_tool_calls: MAX_BUILDER_TOOL_STEPS,
-        stop_server_tools_when: [{ type: "step_count_is", step_count: MAX_BUILDER_TOOL_STEPS }]
-      }),
-      cache: "no-store"
-    });
-
-    if (!upstream.ok) {
-      const detail = await upstream.text().catch(() => "");
-      console.error("NOVA autonomous builder upstream error", {
-        status: upstream.status,
-        detail: safeUpstreamDetail(detail),
-        model: builderModel,
-      });
-      return new Response(
-        upstreamFailure(upstream.status, detail, "builder"),
-        { status: 200 }
-      );
-    }
-
-    const json = await upstream.json();
-    const output = Array.isArray(json?.output) ? json.output : [];
-    const textParts: string[] = [];
-
-    if (typeof json?.output_text === "string") {
-      textParts.push(json.output_text);
-    }
-
-    for (const item of output) {
-      if (typeof item?.text === "string") textParts.push(item.text);
-      if (Array.isArray(item?.content)) {
-        for (const part of item.content) {
-          if (typeof part?.text === "string") textParts.push(part.text);
-        }
-      }
-    }
-
-    const text = [...new Set(textParts)].join("\n").trim();
-
-    if (!text) {
-      const reason =
-        typeof json?.incomplete_details?.reason === "string"
-          ? json.incomplete_details.reason
-          : typeof json?.error?.message === "string"
-            ? json.error.message
-            : "no final text was returned";
-      console.error("NOVA builder returned no final artifact", {
-        status: json?.status,
-        reason,
-        responseId: json?.id,
-        outputTypes: output.map((item: { type?: unknown }) => item?.type).filter(Boolean)
-      });
-      return new Response(
-        "NOVA's builder stopped before producing the project artifact (" + reason + ").",
-        { status: 200 }
-      );
-    }
-
-    let project: ProjectPayload;
-    try {
-      project = extractJson(text);
-    } catch (error) {
-      console.error("NOVA builder returned non-project output", {
-        status: json?.status,
-        responseId: json?.id,
-        outputTypes: output.map((item: { type?: unknown }) => item?.type).filter(Boolean),
-        error: error instanceof Error ? error.message : String(error),
-        preview: text.slice(0, 2000)
-      });
-      return new Response(
-        "NOVA's builder completed, but did not return a valid project artifact.",
-        { status: 502 }
-      );
-    }
-    const payload = "__NOVA_PROJECT__" + JSON.stringify(project);
-
-    return new Response(payload, {
-      headers: {
-        "Content-Type": "text/plain; charset=utf-8",
-        "Cache-Control": "no-store",
-        "X-NOVA-Intent": "build",
-        "X-NOVA-Verified": project.verification?.passed ? "true" : "false"
-      }
-    });
-  } catch (error) {
-    console.error("NOVA autonomous builder error", error);
-    const detail = error instanceof Error ? error.message : String(error);
-    return new Response(
-      "NOVA's autonomous builder failed before completing the request. Detail: " +
-        safeUpstreamDetail(detail),
-      { status: 200 }
-    );
-  }
+export async function POST(req:Request){
+ try{
+  const body=await req.json() as {messages?:unknown;project?:unknown},messages=sanitize(body.messages);
+  if(!messages.length)return new Response("Tell NOVA what you want to build.",{status:400});
+  const existing:Existing|null=body.project&&typeof body.project==="object"&&Array.isArray((body.project as Existing).files)?{
+   name:typeof(body.project as Existing).name==="string"?(body.project as Existing).name:"NOVA Project",
+   summary:typeof(body.project as Existing).summary==="string"?(body.project as Existing).summary:"",
+   files:(body.project as Existing).files.filter(f=>!!f&&typeof f.path==="string"&&typeof f.content==="string"&&!f.path.includes("..")&&!f.path.startsWith("/")).slice(0,12)
+  }:null;
+  const plan=createNovaPlan(messages),prepared=prepareNovaMessages(messages,16);
+  const system=["You are NOVA's autonomous product builder.","Return ONLY one valid JSON object.","Build a complete browser-runnable project using index.html, styles.css and app.js when appropriate.","If an existing project is supplied, preserve working behavior and apply the user's latest request.","Do not use absolute paths, parent traversal, tracking, hidden network dependencies, or remote scripts unless explicitly requested.","Perform a structural self-check before returning.","Do not claim runtime tests were executed. The NOVA server only performs static structural validation.",'Schema: {"name":"string","summary":"string","files":[{"path":"string","content":"string"}],"verification":{"passed":true,"checks":["string"]}}'].join("\n");
+  const requestBody={messages:[{role:"system",content:system},...prepared,...(existing?[{role:"user",content:"EXISTING PROJECT SNAPSHOT:\n"+JSON.stringify(existing)}]:[])],stream:false,response_format:{type:"json_object"}};
+  const attempt=await requestNovaIntelligence({...plan,intent:"build"},requestBody);
+  if(!attempt)return new Response("NOVA builder gateway is not configured. Set NOVA_GATEWAY_URL, NOVA_GATEWAY_API_KEY, and NOVA_GATEWAY_MODEL.",{status:503});
+  if(!attempt.response.ok){const d=await attempt.response.text().catch(()=>"");return new Response("NOVA builder gateway failed ("+attempt.response.status+"). "+d.slice(0,400),{status:200})}
+  const j=await attempt.response.json(),text=j?.choices?.[0]?.message?.content;
+  if(typeof text!=="string"||!text.trim())return new Response("NOVA's builder returned no project artifact.",{status:200});
+  let project:Project;try{project=extract(text)}catch(e){return new Response("NOVA's builder returned an invalid project artifact: "+(e instanceof Error?e.message:String(e)),{status:200})}
+  return new Response("__NOVA_PROJECT__"+JSON.stringify(project),{headers:{"Content-Type":"text/plain; charset=utf-8","Cache-Control":"no-store","X-NOVA-Intent":"build","X-NOVA-Verified":String(project.verification.passed)}});
+ }catch(e){return new Response("NOVA's builder failed: "+(e instanceof Error?e.message:String(e)),{status:200})}
 }
