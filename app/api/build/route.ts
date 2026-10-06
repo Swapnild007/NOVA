@@ -36,6 +36,38 @@ function env(name: string) {
   return process.env[name]?.trim();
 }
 
+function safeUpstreamDetail(raw: string) {
+  const cleaned = raw.replace(/sk-[A-Za-z0-9_-]+/g, "[redacted-key]");
+  try {
+    const parsed = JSON.parse(cleaned);
+    const message =
+      parsed?.error?.message ||
+      parsed?.message ||
+      parsed?.error ||
+      cleaned;
+    return String(message).slice(0, 500);
+  } catch {
+    return cleaned.replace(/\s+/g, " ").slice(0, 500);
+  }
+}
+
+function upstreamFailure(status: number, detail: string, service: string) {
+  const known =
+    status === 401
+      ? "OpenRouter rejected the API key (401 Unauthorized)."
+      : status === 402
+        ? "OpenRouter rejected the request because the account/key has insufficient credits or budget (402)."
+        : status === 403
+          ? "OpenRouter rejected the request (403 Forbidden)."
+          : status === 429
+            ? "OpenRouter rate-limited the request (429)."
+            : status >= 500
+              ? "OpenRouter or the selected provider returned a server error."
+              : "OpenRouter rejected the request.";
+  const extra = safeUpstreamDetail(detail);
+  return `NOVA ${service} connection failed: ${known}${extra ? " Detail: " + extra : ""}`;
+}
+
 function sanitize(raw: unknown): IncomingMessage[] {
   if (!Array.isArray(raw)) return [];
   return raw
@@ -198,8 +230,16 @@ export async function POST(request: Request) {
     });
 
     if (!upstream.ok) {
-      console.error("NOVA autonomous builder upstream error", await upstream.text().catch(() => ""));
-      return new Response("NOVA could not start the build workspace right now. Check the builder connection and try again.", { status: 200 });
+      const detail = await upstream.text().catch(() => "");
+      console.error("NOVA autonomous builder upstream error", {
+        status: upstream.status,
+        detail: safeUpstreamDetail(detail),
+        model: builderModel,
+      });
+      return new Response(
+        upstreamFailure(upstream.status, detail, "builder"),
+        { status: 200 }
+      );
     }
 
     const json = await upstream.json();
@@ -268,6 +308,11 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     console.error("NOVA autonomous builder error", error);
-    return new Response("NOVA's autonomous builder could not complete this build. The request was stopped safely. Try the same build again once.", { status: 200 });
+    const detail = error instanceof Error ? error.message : String(error);
+    return new Response(
+      "NOVA's autonomous builder failed before completing the request. Detail: " +
+        safeUpstreamDetail(detail),
+      { status: 200 }
+    );
   }
 }
