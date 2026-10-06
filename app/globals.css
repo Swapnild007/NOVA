@@ -874,23 +874,34 @@ h1 {
     width: 100%;
     height: 100svh;
     grid-template-columns: 1fr;
+    grid-template-rows: 72px minmax(0, 1fr);
     border-radius: 0;
   }
   .settings-nav {
+    min-height: 0;
+    height: 72px;
     display: flex;
+    align-items: center;
     overflow-x: auto;
+    overflow-y: hidden;
     gap: 5px;
-    padding: 12px;
+    padding: 10px 12px;
     border-right: 0;
     border-bottom: 1px solid var(--line);
+    scrollbar-width: none;
   }
+  .settings-nav::-webkit-scrollbar { display: none; }
   .settings-title { display: none; }
   .settings-nav-item {
     width: auto;
     flex: 0 0 auto;
     white-space: nowrap;
   }
-  .settings-content { padding: 22px 18px 34px; }
+  .settings-content {
+    min-height: 0;
+    overflow-y: auto;
+    padding: 22px 18px 34px;
+  }
   .settings-header h2 { font-size: 27px; }
   .setting-row { align-items: flex-start; }
   .usage-grid { grid-template-columns: 1fr 1fr; }
