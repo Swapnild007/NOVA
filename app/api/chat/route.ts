@@ -27,6 +27,38 @@ function env(name: string) {
   return process.env[name]?.trim();
 }
 
+function safeUpstreamDetail(raw: string) {
+  const cleaned = raw.replace(/sk-[A-Za-z0-9_-]+/g, "[redacted-key]");
+  try {
+    const parsed = JSON.parse(cleaned);
+    const message =
+      parsed?.error?.message ||
+      parsed?.message ||
+      parsed?.error ||
+      cleaned;
+    return String(message).slice(0, 500);
+  } catch {
+    return cleaned.replace(/\s+/g, " ").slice(0, 500);
+  }
+}
+
+function upstreamFailure(status: number, detail: string, service: string) {
+  const known =
+    status === 401
+      ? "OpenRouter rejected the API key (401 Unauthorized)."
+      : status === 402
+        ? "OpenRouter rejected the request because the account/key has insufficient credits or budget (402)."
+        : status === 403
+          ? "OpenRouter rejected the request (403 Forbidden)."
+          : status === 429
+            ? "OpenRouter rate-limited the request (429)."
+            : status >= 500
+              ? "OpenRouter or the selected provider returned a server error."
+              : "OpenRouter rejected the request.";
+  const extra = safeUpstreamDetail(detail);
+  return `NOVA ${service} connection failed: ${known}${extra ? " Detail: " + extra : ""}`;
+}
+
 function sanitizeMessages(rawMessages: unknown): IncomingMessage[] {
   if (!Array.isArray(rawMessages)) return [];
 
@@ -123,8 +155,8 @@ export async function POST(request: Request) {
         detail,
       });
       return new Response(
-        "NOVA could not reach its intelligence service. Please try again.",
-        { status: 502 }
+        upstreamFailure(upstream.status, detail, "intelligence"),
+        { status: 200 }
       );
     }
 
@@ -187,9 +219,12 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     console.error("NOVA gateway error", error);
-    return new Response("NOVA's intelligence gateway is unavailable.", {
-      status: 503,
-    });
+    const detail = error instanceof Error ? error.message : String(error);
+    return new Response(
+      "NOVA's intelligence gateway failed before contacting OpenRouter. Detail: " +
+        safeUpstreamDetail(detail),
+      { status: 200 }
+    );
   }
 }
 
