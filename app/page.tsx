@@ -72,6 +72,15 @@ type NovaSpeechWindow = Window & {
 };
 
 const BUILD_MARKER = "__NOVA_PROJECT__";
+const PENDING_ATTACHMENT_KEY = "nova-pending-attachment";
+const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024;
+
+type NovaAttachment = {
+  name: string;
+  type: string;
+  dataUrl: string;
+  size: number;
+};
 const PROJECT_STORAGE_KEY = "nova-active-project";
 
 type NovaProjectFile = { path: string; content: string };
@@ -555,6 +564,8 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (value: boo
 
 function Home() {
   const aui = useAui();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [attachment, setAttachment] = useState<NovaAttachment | null>(null);
   const isEmpty = useAuiState((state) => state.thread.isEmpty);
   const isRunning = useAuiState((state) => state.thread.isRunning);
   const messages = useAuiState((state) => state.thread.messages);
@@ -610,6 +621,50 @@ function Home() {
   const setComposerValue = (value: string) => {
     aui.composer.setText(value);
     setMenuOpen(false);
+  };
+
+  const chooseAttachment = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleAttachment = (file: File) => {
+    if (file.size > MAX_ATTACHMENT_BYTES) {
+      aui.composer.setText("That file is larger than 8 MB. Please choose a smaller file.");
+      setComposerMenuOpen(false);
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = typeof reader.result === "string" ? reader.result : "";
+      if (!dataUrl) return;
+
+      const next = {
+        name: file.name,
+        type: file.type || "application/octet-stream",
+        dataUrl,
+        size: file.size,
+      };
+
+      try {
+        localStorage.setItem(PENDING_ATTACHMENT_KEY, JSON.stringify(next));
+      } catch {
+        aui.composer.setText("This file could not be prepared in the browser. Please choose a smaller file.");
+        return;
+      }
+
+      setAttachment(next);
+      aui.composer.setText(
+        aui.composer.getState?.()?.text || `Please analyze the attached file: ${file.name}`
+      );
+      setComposerMenuOpen(false);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const clearAttachment = () => {
+    localStorage.removeItem(PENDING_ATTACHMENT_KEY);
+    setAttachment(null);
   };
 
   return (
@@ -685,6 +740,17 @@ function Home() {
               />
 
               <div className="composer-footer">
+                <input
+                  ref={fileInputRef}
+                  className="nova-file-input"
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,application/pdf,text/plain,text/markdown,text/csv,application/json"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file) handleAttachment(file);
+                    event.currentTarget.value = "";
+                  }}
+                />
                 <div className="composer-tools">
                   <div className="composer-menu-wrap">
                     <button
@@ -699,9 +765,12 @@ function Home() {
 
                     {composerMenuOpen && (
                       <div className="composer-menu" role="menu">
-                        <button type="button" role="menuitem" onClick={() => { aui.composer.setText("Add photos or files to this conversation."); setComposerMenuOpen(false); }}>
+                        <button type="button" role="menuitem" onClick={chooseAttachment}>
                           <span className="composer-menu-icon">＋</span>
-                          <span><strong>Add photos & files</strong></span>
+                          <span>
+                            <strong>Add photos & files</strong>
+                            <small>Images, PDFs and text files</small>
+                          </span>
                         </button>
                         <button type="button" role="menuitem" onClick={() => { aui.composer.setText("Create an image for me."); setComposerMenuOpen(false); }}>
                           <span className="composer-menu-icon">✦</span>
