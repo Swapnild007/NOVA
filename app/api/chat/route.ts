@@ -3,6 +3,10 @@ import {
   createNovaPlan,
   prepareNovaMessages,
 } from "./nova-gateway";
+import {
+  providerLabel,
+  requestNovaProvider,
+} from "./provider-router";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,7 +23,6 @@ type UsagePayload = {
   cost?: number;
 };
 
-const OPENROUTER_URL = "https://openrouter.ai/api/v1";
 const USAGE_MARKER = "__NOVA_USAGE__";
 const MAX_MESSAGES = 40;
 
@@ -76,14 +79,6 @@ function sanitizeMessages(rawMessages: unknown): IncomingMessage[] {
 }
 
 export async function POST(request: Request) {
-  const apiKey = env("OPENROUTER_API_KEY");
-
-  if (!apiKey) {
-    return new Response(
-      "NOVA is ready, but its OpenRouter connection is not configured. Add OPENROUTER_API_KEY to the Vercel production environment.",
-      { status: 503 }
-    );
-  }
 
   try {
     const body = (await request.json()) as { messages?: unknown };
@@ -104,17 +99,12 @@ export async function POST(request: Request) {
     }
 
     const requestBody: Record<string, unknown> = {
-      model: plan.model,
       messages: [
         { role: "system", content: buildNovaSystem(plan) },
         ...messages,
       ],
       stream: true,
     };
-
-    if (plan.fallbackModels.length) {
-      requestBody.models = plan.fallbackModels;
-    }
 
     if (plan.useWeb) {
       requestBody.plugins = [
@@ -131,24 +121,22 @@ export async function POST(request: Request) {
       ];
     }
 
-    const upstream = await fetch(
-      OPENROUTER_URL + "/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          Authorization: "Bearer " + apiKey,
-          "Content-Type": "application/json",
-          "HTTP-Referer": "https://nova-gamma-mocha.vercel.app",
-          "X-Title": "NOVA",
-        },
-        body: JSON.stringify(requestBody),
-        cache: "no-store",
-      }
-    );
+    const attempt = await requestNovaProvider(plan, requestBody);
+
+    if (!attempt) {
+      return new Response(
+        "NOVA could not reach any configured intelligence provider. Add GEMINI_API_KEY or GROQ_API_KEY to create a fallback path, or keep OPENROUTER_API_KEY configured.",
+        { status: 200 }
+      );
+    }
+
+    const { response: upstream } = attempt;
 
     if (!upstream.ok || !upstream.body) {
       const detail = await upstream.text().catch(() => "");
-      console.error("NOVA upstream error", {
+      console.error("NOVA provider error", {
+        provider: attempt.provider,
+        model: attempt.model,
         status: upstream.status,
         intent: plan.intent,
         web: plan.useWeb,
@@ -214,7 +202,8 @@ export async function POST(request: Request) {
         "Content-Type": "text/plain; charset=utf-8",
         "Cache-Control": "no-cache, no-transform",
         "X-NOVA-Intent": plan.intent,
-        "X-NOVA-Web": String(plan.useWeb),
+        "X-NOVA-Provider": providerLabel(attempt.provider),
+        "X-NOVA-Web": String(plan.useWeb && attempt.provider === "openrouter"),
       },
     });
   } catch (error) {
