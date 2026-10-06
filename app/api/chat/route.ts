@@ -11,7 +11,7 @@ export async function POST(req:Request){
  try{
   const body=await req.json() as {messages?:unknown}, valid=sanitize(body.messages); if(!valid.length)return new Response("NOVA needs a message to begin.",{status:400});
   const plan=createNovaPlan(valid),messages=prepareNovaMessages(valid,plan.contextMessages),objective=textOf(messages.filter(m=>m.role==="user").at(-1)?.content);
-  const attempt=await requestNovaIntelligence(plan,{messages:[{role:"system",content:buildNovaSystem(plan,objective)},...messages],stream:true});
+  const attempt=await requestNovaIntelligence(plan,{messages:[{role:"system",content:buildNovaSystem(plan,objective)},...messages],stream:true,...(plan.useWeb?{tools:[{type:"openrouter:web_search"}],tool_choice:"auto",max_tool_calls:plan.deepResearch?6:2}: {})});
   if(!attempt)return new Response("NOVA gateway is not configured. Set NOVA_GATEWAY_URL, NOVA_GATEWAY_API_KEY, and an exact NOVA_GATEWAY_MODEL.",{status:503});
   if(!attempt.response.ok||!attempt.response.body){const d=await attempt.response.text().catch(()=>"");return new Response(failure(attempt.response.status,d),{status:200})}
   const reader=attempt.response.body.getReader(),decoder=new TextDecoder(),encoder=new TextEncoder();
