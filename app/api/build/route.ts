@@ -31,7 +31,7 @@ export async function POST(req:Request){
   }:null;
   const plan=createNovaPlan(messages),prepared=prepareNovaMessages(messages,16);
   const system=["You are NOVA's autonomous product builder.","Return ONLY one valid JSON object.","Build a complete browser-runnable project using index.html, styles.css and app.js when appropriate.","If an existing project is supplied, preserve working behavior and apply the user's latest request.","Do not use absolute paths, parent traversal, tracking, hidden network dependencies, or remote scripts unless explicitly requested.","Perform a structural self-check before returning.","Do not claim runtime tests were executed. The NOVA server only performs static structural validation.",'Schema: {"name":"string","summary":"string","files":[{"path":"string","content":"string"}],"verification":{"passed":true,"checks":["string"]}}'].join("\n");
-  const requestBody={messages:[{role:"system",content:system},...prepared,...(existing?[{role:"user",content:"EXISTING PROJECT SNAPSHOT:\n"+JSON.stringify(existing)}]:[])],stream:false,response_format:{type:"json_object"}};
+  const requestBody={messages:[{role:"system",content:system+(existing?"\nEXISTING PROJECT SNAPSHOT:\n"+JSON.stringify(existing):"")},...prepared],stream:false};
   const attempt=await requestNovaIntelligence({...plan,intent:"build"},requestBody);
   if(!attempt)return new Response("NOVA builder gateway is not configured. Set NOVA_GATEWAY_URL, NOVA_GATEWAY_API_KEY, and NOVA_GATEWAY_MODEL.",{status:503});
   if(!attempt.response.ok){const d=await attempt.response.text().catch(()=>"");return new Response("NOVA builder gateway failed ("+attempt.response.status+"). "+d.slice(0,400),{status:200})}
