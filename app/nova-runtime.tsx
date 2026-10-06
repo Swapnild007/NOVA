@@ -11,20 +11,18 @@ type Message = { role: "user" | "assistant" | "system"; content: TextPart[] };
 
 const adapter: ChatModelAdapter = {
   async *run({ messages, abortSignal }) {
-    const payload = {
-      messages: messages.map((message: Message) => ({
-        role: message.role,
-        content: message.content
-          .filter((part) => part.type === "text")
-          .map((part) => part.text)
-          .join(""),
-      })),
-    };
-
     const response = await fetch("/api/chat", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        messages: messages.map((message: Message) => ({
+          role: message.role,
+          content: message.content
+            .filter((part) => part.type === "text")
+            .map((part) => part.text)
+            .join(""),
+        })),
+      }),
       signal: abortSignal,
     });
 
