@@ -118,6 +118,9 @@ export async function requestNovaProvider(
           headers: headersFor(provider, apiKey),
           body: JSON.stringify(body),
           cache: "no-store",
+          signal: AbortSignal.timeout(
+            Number(env("NOVA_PROVIDER_TIMEOUT_MS") || 20000)
+          ),
         });
 
         if (response.ok && response.body) {
