@@ -22,6 +22,12 @@ type ProjectPayload = {
   verification?: { passed?: boolean; checks?: string[] };
 };
 
+type ExistingProject = {
+  name: string;
+  summary?: string;
+  files: ProjectFile[];
+};
+
 
 function env(name: string) {
   return process.env[name]?.trim();
@@ -72,6 +78,16 @@ function extractJson(text: string): ProjectPayload {
     name: parsed.name.slice(0, 80),
     summary: typeof parsed.summary === "string" ? parsed.summary.slice(0, 500) : "",
     files,
+    verification: parsed.verification
+      ? {
+          passed: Boolean(parsed.verification.passed),
+          checks: Array.isArray(parsed.verification.checks)
+            ? parsed.verification.checks
+                .filter((check): check is string => typeof check === "string")
+                .slice(0, 20)
+            : [],
+        }
+      : undefined,
   };
 }
 
@@ -80,9 +96,32 @@ export async function POST(request: Request) {
   if (!apiKey) return new Response("NOVA's build connection is not configured.", { status: 503 });
 
   try {
-    const body = (await request.json()) as { messages?: unknown };
+    const body = (await request.json()) as { messages?: unknown; project?: unknown };
     const messages = sanitize(body.messages);
     if (!messages.length) return new Response("Tell NOVA what you want to build.", { status: 400 });
+
+    const existingProject: ExistingProject | null =
+      body.project &&
+      typeof body.project === "object" &&
+      Array.isArray((body.project as ExistingProject).files)
+        ? {
+            name: typeof (body.project as ExistingProject).name === "string"
+              ? (body.project as ExistingProject).name.slice(0, 80)
+              : "NOVA Project",
+            summary: typeof (body.project as ExistingProject).summary === "string"
+              ? (body.project as ExistingProject).summary.slice(0, 500)
+              : "",
+            files: (body.project as ExistingProject).files
+              .filter(
+                (file): file is ProjectFile =>
+                  !!file &&
+                  typeof file === "object" &&
+                  typeof file.path === "string" &&
+                  typeof file.content === "string"
+              )
+              .slice(0, 12),
+          }
+        : null;
 
     const plan = createNovaPlan(messages);
     const prepared = prepareNovaMessages(messages, Math.min(plan.contextMessages, 16));
@@ -90,7 +129,13 @@ export async function POST(request: Request) {
     const system = [
       "You are NOVA's autonomous product builder.",
       "You have a real isolated Linux workspace through the shell tool.",
-      "Do not merely describe code. Build the requested web application in /workspace.",
+      existingProject
+        ? "Load the supplied existing files into /workspace before making changes, then validate the resulting project."
+        : "Build the project directly in /workspace.",
+      "Do not merely describe code. Build or modify the requested web application in /workspace.",
+      existingProject
+        ? "An existing project snapshot is supplied below. Treat it as the source of truth. Inspect it first, preserve working behavior, and modify only what the user's latest request requires."
+        : "Start a new project in /workspace.",
       "Create index.html, styles.css and app.js. Add other files only when genuinely needed.",
       "Run real validation after writing files. At minimum verify the files exist, HTML has a body, CSS is non-empty, and JavaScript parses with Node.",
       "If validation fails, inspect the error, edit the files, and run validation again.",
@@ -100,7 +145,10 @@ export async function POST(request: Request) {
       "Make the result polished, responsive, accessible, and interactive.",
       "When finished, read the final files and return ONLY valid JSON.",
       'Final JSON schema: {"name":"string","summary":"string","files":[{"path":"index.html","content":"string"},{"path":"styles.css","content":"string"},{"path":"app.js","content":"string"}],"verification":{"passed":true,"checks":["string"]}}',
-      "Include the exact final contents of every returned file."
+      "Include the exact final contents of every returned file.",
+      existingProject
+        ? "Return the complete updated project, including unchanged files, so NOVA can persist the new state."
+        : "Return the complete project so NOVA can persist it for future edits."
     ].join("\n");
 
     const upstream = await fetch(OPENROUTER_URL + "/responses", {
@@ -119,7 +167,12 @@ export async function POST(request: Request) {
             role: "user",
             content: [{
               type: "input_text",
-              text: prepared.map((message) => message.role.toUpperCase() + ": " + message.content).join("\n\n")
+              text: [
+                prepared.map((message) => message.role.toUpperCase() + ": " + message.content).join("\n\n"),
+                existingProject
+                  ? "\n\nEXISTING PROJECT SNAPSHOT:\n" + JSON.stringify(existingProject)
+                  : ""
+              ].join("")
             }]
           }
         ],
