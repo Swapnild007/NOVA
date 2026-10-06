@@ -3,10 +3,7 @@ import {
   createNovaPlan,
   prepareNovaMessages,
 } from "./nova-gateway";
-import {
-  providerLabel,
-  requestNovaProvider,
-} from "./provider-router";
+import { requestNovaIntelligence } from "./intelligence-gateway";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -121,11 +118,11 @@ export async function POST(request: Request) {
       ];
     }
 
-    const attempt = await requestNovaProvider(plan, requestBody);
+    const attempt = await requestNovaIntelligence(plan, requestBody);
 
     if (!attempt) {
       return new Response(
-        "NOVA could not reach any configured intelligence provider. Add GEMINI_API_KEY or GROQ_API_KEY to create a fallback path, or keep OPENROUTER_API_KEY configured.",
+        "NOVA could not reach its intelligence network. The gateway and all configured fallback providers are currently unavailable.",
         { status: 200 }
       );
     }
@@ -202,15 +199,15 @@ export async function POST(request: Request) {
         "Content-Type": "text/plain; charset=utf-8",
         "Cache-Control": "no-cache, no-transform",
         "X-NOVA-Intent": plan.intent,
-        "X-NOVA-Provider": providerLabel(attempt.provider),
-        "X-NOVA-Web": String(plan.useWeb && attempt.provider === "openrouter"),
+        "X-NOVA-Provider": attempt.label,
+        "X-NOVA-Web": String(plan.useWeb),
       },
     });
   } catch (error) {
     console.error("NOVA gateway error", error);
     const detail = error instanceof Error ? error.message : String(error);
     return new Response(
-      "NOVA's intelligence gateway failed before contacting OpenRouter. Detail: " +
+      "NOVA's intelligence gateway failed before contacting an intelligence provider. Detail: " +
         safeUpstreamDetail(detail),
       { status: 200 }
     );
