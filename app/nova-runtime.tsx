@@ -6,16 +6,13 @@ import {
   type ChatModelAdapter,
 } from "@assistant-ui/react";
 
-type TextPart = { type: "text"; text: string };
-type Message = { role: "user" | "assistant" | "system"; content: TextPart[] };
-
 const adapter: ChatModelAdapter = {
   async *run({ messages, abortSignal }) {
     const response = await fetch("/api/chat", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        messages: messages.map((message: Message) => ({
+        messages: messages.map((message) => ({
           role: message.role,
           content: message.content
             .filter((part) => part.type === "text")
