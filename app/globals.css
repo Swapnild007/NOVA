@@ -976,6 +976,26 @@ h1 {
   .setting-row { align-items: flex-start; }
   .usage-grid { grid-template-columns: 1fr 1fr; }
   .capabilities { margin-top: 11px; }
+  .composer-menu {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    bottom: 78px;
+    width: auto;
+    border-radius: 20px;
+    padding: 8px;
+  }
+
+  .composer-menu button {
+    min-height: 48px;
+    padding: 10px 11px;
+  }
+
+  .composer-menu-icon {
+    width: 34px;
+    height: 34px;
+  }
+
   .capabilities button { padding: 9px 13px; }
 }
 
