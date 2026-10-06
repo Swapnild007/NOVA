@@ -45,16 +45,16 @@ function safeUpstreamDetail(raw: string) {
 function upstreamFailure(status: number, detail: string, service: string) {
   const known =
     status === 401
-      ? "OpenRouter rejected the API key (401 Unauthorized)."
+      ? "The intelligence provider rejected authentication (401 Unauthorized)."
       : status === 402
-        ? "OpenRouter rejected the request because the account/key has insufficient credits or budget (402)."
+        ? "The intelligence provider rejected the request because the account or key has insufficient credits or budget (402)."
         : status === 403
-          ? "OpenRouter rejected the request (403 Forbidden)."
+          ? "The intelligence provider rejected the request (403 Forbidden)."
           : status === 429
-            ? "OpenRouter rate-limited the request (429)."
+            ? "The intelligence provider rate-limited the request (429)."
             : status >= 500
-              ? "OpenRouter or the selected provider returned a server error."
-              : "OpenRouter rejected the request.";
+              ? "The intelligence provider returned a server error."
+              : "The intelligence provider rejected the request.";
   const extra = safeUpstreamDetail(detail);
   return `NOVA ${service} connection failed: ${known}${extra ? " Detail: " + extra : ""}`;
 }
@@ -200,7 +200,7 @@ export async function POST(request: Request) {
         "Cache-Control": "no-cache, no-transform",
         "X-NOVA-Intent": plan.intent,
         "X-NOVA-Provider": attempt.label,
-        "X-NOVA-Web": String(plan.useWeb),
+        "X-NOVA-Web": String(plan.useWeb && attempt.source === "provider" && attempt.label === "OpenRouter"),
       },
     });
   } catch (error) {
