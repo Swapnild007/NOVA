@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AuiIf,
   ComposerPrimitive,
@@ -70,6 +70,84 @@ type NovaSpeechWindow = Window & {
   webkitSpeechRecognition?: NovaSpeechRecognitionConstructor;
 };
 
+const BUILD_MARKER = "__NOVA_PROJECT__";
+
+type NovaProjectFile = { path: string; content: string };
+type NovaProject = { name: string; summary: string; files: NovaProjectFile[] };
+
+function parseNovaProject(text: string): NovaProject | null {
+  if (!text.startsWith(BUILD_MARKER)) return null;
+  try {
+    const parsed = JSON.parse(text.slice(BUILD_MARKER.length)) as NovaProject;
+    if (!parsed?.name || !Array.isArray(parsed.files)) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function buildPreview(files: NovaProjectFile[]) {
+  const index = files.find((file) => file.path === "index.html")?.content || "";
+  const css = files.find((file) => file.path === "styles.css")?.content || "";
+  const js = files.find((file) => file.path === "app.js")?.content || "";
+  return index
+    .replace(/<link[^>]+href=["']\\.?\\/styles\\.css["'][^>]*>\\s*/i, "<style>\\n" + css + "\\n</style>\\n")
+    .replace(/<script[^>]+src=["']\\.?\\/app\\.js["'][^>]*><\\/script>/i, "<script>\\n" + js + "\\n</script>");
+}
+
+function ProjectArtifact({ project }: { project: NovaProject }) {
+  const [files, setFiles] = useState(project.files);
+  const [selected, setSelected] = useState(project.files[0]?.path || "index.html");
+  const [view, setView] = useState<"preview" | "code">("preview");
+  const active = files.find((file) => file.path === selected) || files[0];
+  const preview = useMemo(() => buildPreview(files), [files]);
+
+  const updateActive = (content: string) => {
+    if (!active) return;
+    setFiles((current) => current.map((file) => file.path === active.path ? { ...file, content } : file));
+  };
+
+  return (
+    <section className="project-artifact">
+      <div className="project-artifact-head">
+        <div>
+          <span className="project-kicker">WORKSPACE</span>
+          <h3>{project.name}</h3>
+          <p>{project.summary}</p>
+        </div>
+        <div className="project-view-toggle">
+          <button type="button" className={view === "preview" ? "selected" : ""} onClick={() => setView("preview")}>Preview</button>
+          <button type="button" className={view === "code" ? "selected" : ""} onClick={() => setView("code")}>Code</button>
+        </div>
+      </div>
+
+      <div className="project-artifact-body">
+        <aside className="project-files">
+          {files.map((file) => (
+            <button type="button" key={file.path} className={selected === file.path ? "selected" : ""} onClick={() => setSelected(file.path)}>
+              <span>{file.path.split("/").pop()}</span>
+            </button>
+          ))}
+        </aside>
+
+        <div className="project-stage">
+          {view === "preview" ? (
+            <iframe title={project.name + " preview"} className="project-preview" sandbox="allow-scripts" srcDoc={preview} />
+          ) : (
+            <textarea
+              className="project-editor"
+              value={active?.content || ""}
+              onChange={(event) => updateActive(event.target.value)}
+              spellCheck={false}
+              aria-label={active?.path || "Project file"}
+            />
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function formatNumber(value: number) {
   return new Intl.NumberFormat("en-IN").format(value);
 }
@@ -125,6 +203,15 @@ function Message() {
   };
 
   if (!text) return null;
+
+  const project = parseNovaProject(text);
+  if (text.startsWith(BUILD_MARKER)) {
+    return (
+      <MessagePrimitive.Root className="message message-assistant">
+        {project ? <ProjectArtifact project={project} /> : <div className="project-building">Building your workspace…</div>}
+      </MessagePrimitive.Root>
+    );
+  }
 
   return (
     <MessagePrimitive.Root
