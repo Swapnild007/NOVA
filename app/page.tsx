@@ -42,13 +42,23 @@ const settingsSections: SettingsSection[] = [
   "About",
 ];
 
+type NovaSpeechResult = {
+  0?: { transcript?: string };
+};
+
+type NovaSpeechResultList = ArrayLike<NovaSpeechResult>;
+
+type NovaSpeechRecognitionEvent = {
+  results: NovaSpeechResultList;
+};
+
 type NovaSpeechRecognition = {
   continuous: boolean;
   interimResults: boolean;
   lang: string;
   start: () => void;
   stop: () => void;
-  onresult: ((event: { results: SpeechRecognitionResultList }) => void) | null;
+  onresult: ((event: NovaSpeechRecognitionEvent) => void) | null;
   onerror: (() => void) | null;
   onend: (() => void) | null;
 };
@@ -153,7 +163,7 @@ function VoiceButton() {
       return;
     }
 
-    const recognition = new Recognition();
+    const recognition = new Recognition() as NovaSpeechRecognition;
     recognition.continuous = false;
     recognition.interimResults = true;
     recognition.lang = localStorage.getItem("nova-voice-language") || "en-IN";
