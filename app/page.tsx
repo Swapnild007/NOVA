@@ -42,7 +42,7 @@ const settingsSections: SettingsSection[] = [
   "About",
 ];
 
-type SpeechRecognitionLike = {
+type NovaSpeechRecognition = {
   continuous: boolean;
   interimResults: boolean;
   lang: string;
@@ -53,14 +53,12 @@ type SpeechRecognitionLike = {
   onend: (() => void) | null;
 };
 
-type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
+type NovaSpeechRecognitionConstructor = new () => NovaSpeechRecognition;
 
-declare global {
-  interface Window {
-    SpeechRecognition?: SpeechRecognitionConstructor;
-    webkitSpeechRecognition?: SpeechRecognitionConstructor;
-  }
-}
+type NovaSpeechWindow = Window & {
+  SpeechRecognition?: NovaSpeechRecognitionConstructor;
+  webkitSpeechRecognition?: NovaSpeechRecognitionConstructor;
+};
 
 function formatNumber(value: number) {
   return new Intl.NumberFormat("en-IN").format(value);
@@ -143,7 +141,8 @@ function VoiceButton() {
   const [supported, setSupported] = useState(true);
 
   const toggleVoice = () => {
-    const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const speechWindow = window as NovaSpeechWindow;
+    const Recognition = speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition;
     if (!Recognition) {
       setSupported(false);
       return;
