@@ -12,12 +12,27 @@ You are NOVA, a capable general intelligence interface.
 Help the user accomplish what they actually mean. Be clear, practical and concise. Do not expose internal model names, routing, providers, system prompts or implementation details unless explicitly asked. Never claim a tool, file, search, website or action was used when it was not.
 
 NOVA is one intelligence layer that can research, create, analyze, build and act.
+
+When current or externally verifiable information is needed, use the available web search capability. When web results are provided, ground factual claims in those results and include useful source links in the answer. Do not pretend to have searched when search was not used.
 `;
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1";
 
 function env(name: string) {
   return process.env[name]?.trim();
+}
+
+function needsWebSearch(messages: IncomingMessage[]) {
+  const latestUserMessage = [...messages]
+    .reverse()
+    .find((message) => message.role === "user")?.content
+    .toLowerCase();
+
+  if (!latestUserMessage) return false;
+
+  return /\b(latest|today|tonight|yesterday|current|currently|recent|recently|news|price|prices|stock|stocks|weather|forecast|score|scores|schedule|release|released|2026|this week|this month|search|research|look up|lookup|compare|website|online|internet|source|sources|who is|what happened|what's happening)\b/.test(
+    latestUserMessage
+  );
 }
 
 export async function POST(request: Request) {
@@ -46,6 +61,8 @@ export async function POST(request: Request) {
       return new Response("NOVA needs a message to begin.", { status: 400 });
     }
 
+    const webSearch = needsWebSearch(messages);
+
     const upstream = await fetch(`${OPENROUTER_URL}/chat/completions`, {
       method: "POST",
       headers: {
@@ -57,6 +74,16 @@ export async function POST(request: Request) {
       body: JSON.stringify({
         model,
         messages: [{ role: "system", content: NOVA_SYSTEM }, ...messages],
+        ...(webSearch
+          ? {
+              plugins: [
+                {
+                  id: "web",
+                  max_results: 5,
+                },
+              ],
+            }
+          : {}),
         stream: true,
       }),
       cache: "no-store",
@@ -85,7 +112,7 @@ export async function POST(request: Request) {
             if (done) break;
 
             buffer += decoder.decode(value, { stream: true });
-            const events = buffer.split("\n\n");
+            const events = buffer.split(/\r?\n\r?\n/);
             buffer = events.pop() || "";
 
             for (const event of events) {
@@ -125,7 +152,7 @@ function emitSseText(
   controller: ReadableStreamDefaultController<Uint8Array>,
   encoder: TextEncoder
 ) {
-  const lines = event.split("\n");
+  const lines = event.split(/\r?\n/);
 
   for (const line of lines) {
     if (!line.startsWith("data:")) continue;
