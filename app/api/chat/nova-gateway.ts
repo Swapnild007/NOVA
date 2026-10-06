@@ -5,7 +5,8 @@ import { buildRuntimeInstruction, createNovaExecutionPlan } from "./nova-capabil
 
 export type NovaIntent="general"|"research"|"create"|"analyze"|"build"|"plan"|"act";
 export type NovaGatewayPlan={intent:NovaIntent;model:string;fallbackModels:string[];useWeb:boolean;deepResearch:boolean;contextMessages:number;shield:ReturnType<typeof assessNovaInput>};
-type Msg={role:"user"|"assistant"|"system";content:string};
+type Msg={role:"user"|"assistant"|"system";content:any};
+const textOf=(content:any)=>typeof content==="string"?content:Array.isArray(content)?content.filter((p:any)=>p?.type==="text").map((p:any)=>p.text||"").join(""):"";
 
 const WEB=/\b(latest|today|current|recent|news|price|weather|forecast|score|schedule|release|search|research|look up|lookup|compare|website|online|internet|source|sources|what happened)\b/i;
 const DEEP=/\b(deep research|deep dive|comprehensive research|thorough research|investigate|literature review|compare in depth)\b/i;
@@ -16,7 +17,7 @@ const PLAN=/\b(plan|planning|roadmap|strategy|steps|itinerary|organize|break dow
 const ACT=/\b(send|book|buy|deploy|publish|upload|download|schedule|remind|email|message|post|apply|submit|turn on|turn off)\b/i;
 const env=(n:string)=>process.env[n]?.trim();
 const list=(n:string)=>(env(n)||"").split(",").map(x=>x.trim()).filter(Boolean);
-const latest=(m:Msg[])=>[...m].reverse().find(x=>x.role==="user")?.content.trim()||"";
+const latest=(m:Msg[])=>textOf([...m].reverse().find(x=>x.role==="user")?.content).trim();
 
 export function classifyNovaIntent(m:Msg[]):NovaIntent{
  const t=latest(m);
@@ -29,7 +30,7 @@ export function createNovaPlan(m:Msg[]):NovaGatewayPlan{
  return {intent,model,fallbackModels:list("NOVA_GATEWAY_FALLBACK_MODELS").filter(x=>x!==model),
  useWeb:deepResearch||intent==="research"||WEB.test(t),deepResearch,contextMessages:deepResearch?32:20,shield:assessNovaInput(t)};
 }
-export function prepareNovaMessages(m:Msg[],n:number){return m.filter(x=>x&&typeof x.content==="string"&&["user","assistant","system"].includes(x.role)).slice(-n).map(x=>({...x,content:x.content.trim().slice(0,16000)})).filter(x=>x.content.length>0);}
+export function prepareNovaMessages(m:Msg[],n:number){return m.filter(x=>x&&x.content&&["user","assistant","system"].includes(x.role)).slice(-n).map(x=>({...x,content:typeof x.content==="string"?x.content.trim().slice(0,16000):x.content})).filter(x=>x.content.length>0);}
 export function buildNovaSystem(plan:NovaGatewayPlan, objectiveText?:string){
  const mode:Record<NovaIntent,string>={
  general:"Answer directly using conversation context.",
