@@ -8,6 +8,7 @@ import {
   useAuiState,
 } from "@assistant-ui/react";
 import { NovaRuntime } from "./nova-runtime";
+import { NovaMarkdown } from "./nova-markdown";
 
 function Message() {
   const message = useAuiState((state) => state.message);
@@ -29,7 +30,9 @@ function Message() {
       <div className="message-label">
         {message.role === "user" ? "You" : "NOVA"}
       </div>
-      <div className="message-text">{text}</div>
+      <div className="message-text">
+        {message.role === "assistant" ? <NovaMarkdown>{text}</NovaMarkdown> : text}
+      </div>
     </MessagePrimitive.Root>
   );
 }
