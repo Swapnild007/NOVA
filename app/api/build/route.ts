@@ -206,6 +206,10 @@ export async function POST(request: Request) {
     const output = Array.isArray(json?.output) ? json.output : [];
     const textParts: string[] = [];
 
+    if (typeof json?.output_text === "string") {
+      textParts.push(json.output_text);
+    }
+
     for (const item of output) {
       if (typeof item?.text === "string") textParts.push(item.text);
       if (Array.isArray(item?.content)) {
@@ -215,10 +219,43 @@ export async function POST(request: Request) {
       }
     }
 
-    const text = textParts.join("\n").trim();
-    if (!text) return new Response("NOVA received an empty build result.", { status: 502 });
+    const text = [...new Set(textParts)].join("\n").trim();
 
-    const project = extractJson(text);
+    if (!text) {
+      const reason =
+        typeof json?.incomplete_details?.reason === "string"
+          ? json.incomplete_details.reason
+          : typeof json?.error?.message === "string"
+            ? json.error.message
+            : "no final text was returned";
+      console.error("NOVA builder returned no final artifact", {
+        status: json?.status,
+        reason,
+        responseId: json?.id,
+        outputTypes: output.map((item: { type?: unknown }) => item?.type).filter(Boolean)
+      });
+      return new Response(
+        "NOVA's builder stopped before producing the project artifact (" + reason + ").",
+        { status: 502 }
+      );
+    }
+
+    let project: ProjectPayload;
+    try {
+      project = extractJson(text);
+    } catch (error) {
+      console.error("NOVA builder returned non-project output", {
+        status: json?.status,
+        responseId: json?.id,
+        outputTypes: output.map((item: { type?: unknown }) => item?.type).filter(Boolean),
+        error: error instanceof Error ? error.message : String(error),
+        preview: text.slice(0, 2000)
+      });
+      return new Response(
+        "NOVA's builder completed, but did not return a valid project artifact.",
+        { status: 502 }
+      );
+    }
     const payload = "__NOVA_PROJECT__" + JSON.stringify(project);
 
     return new Response(payload, {
