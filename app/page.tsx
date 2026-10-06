@@ -91,9 +91,17 @@ function buildPreview(files: NovaProjectFile[]) {
   const index = files.find((file) => file.path === "index.html")?.content || "";
   const css = files.find((file) => file.path === "styles.css")?.content || "";
   const js = files.find((file) => file.path === "app.js")?.content || "";
-  return index
-    .replace(/<link[^>]+href=["']\\.?\\/styles\\.css["'][^>]*>\\s*/i, "<style>\\n" + css + "\\n</style>\\n")
-    .replace(/<script[^>]+src=["']\\.?\\/app\\.js["'][^>]*><\\/script>/i, "<script>\\n" + js + "\\n</script>");
+
+  // Keep the preview renderer deliberately simple and parser-safe.
+  // The generated project is self-contained inside the iframe.
+  const withCss = index.replace(
+    /styles\\.css/g,
+    "data:text/css,"
+  );
+
+  return withCss
+    .replace("</head>", "<style>\\n" + css + "\\n</style>\\n</head>")
+    .replace("</body>", "<script>\\n" + js + "\\n</script>\\n</body>");
 }
 
 function ProjectArtifact({ project }: { project: NovaProject }) {
