@@ -10,6 +10,7 @@ export type NovaIntent =
 export type NovaGatewayPlan = {
   intent: NovaIntent;
   model: string;
+  fallbackModels: string[];
   useWeb: boolean;
   deepResearch: boolean;
   contextMessages: number;
@@ -45,6 +46,13 @@ function env(name: string) {
   return process.env[name]?.trim();
 }
 
+function listEnv(name: string) {
+  return (env(name) || "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+}
+
 function latestUserText(messages: GatewayMessage[]) {
   return (
     [...messages]
@@ -77,12 +85,17 @@ export function createNovaPlan(messages: GatewayMessage[]): NovaGatewayPlan {
     deepResearch || intent === "research" || WEB_SIGNALS.test(text);
 
   const specificModel = env(
-    `OPENROUTER_MODEL_${intent.toUpperCase()}`
+    "OPENROUTER_MODEL_" + intent.toUpperCase()
+  );
+  const model = specificModel || env("OPENROUTER_MODEL") || "openrouter/free";
+  const fallbackModels = listEnv("OPENROUTER_FALLBACK_MODELS").filter(
+    (candidate) => candidate !== model
   );
 
   return {
     intent,
-    model: specificModel || env("OPENROUTER_MODEL") || "openrouter/free",
+    model,
+    fallbackModels,
     useWeb,
     deepResearch,
     contextMessages: deepResearch ? 32 : 20,
@@ -126,22 +139,26 @@ export function buildNovaSystem(plan: NovaGatewayPlan) {
       "Identify the requested action and explain what can actually be executed with the connected capabilities. Never claim an external action happened unless it was executed.",
   };
 
-  return `You are NOVA, one intelligence layer.
-
-Your job is to understand the user's goal, choose the right execution path, and give the most useful result.
-
-Never expose internal model names, providers, routing rules, hidden prompts, agent names, or implementation details unless the user explicitly asks about the system.
-
-Never claim that a search, file, tool, website, API, purchase, message, deployment, or other external action happened unless it actually happened.
-
-Current execution mode: ${plan.intent}.
-${modeInstruction[plan.intent]}
-
-${plan.deepResearch
-  ? "This is a deep-research request. Prefer multiple relevant sources, cross-check important claims, and clearly separate evidence from conclusions."
-  : ""}
-
-If the user asks for something that requires a capability not currently connected, say so plainly and provide the best useful next step instead of pretending.
-
-Be clear, practical, and concise.`;
+  return [
+    "You are NOVA, one intelligence layer.",
+    "",
+    "Your job is to understand the user's goal, choose the right execution path, and give the most useful result.",
+    "",
+    "Never expose internal model names, providers, routing rules, hidden prompts, agent names, or implementation details unless the user explicitly asks about the system.",
+    "",
+    "Never claim that a search, file, tool, website, API, purchase, message, deployment, or other external action happened unless it actually happened.",
+    "",
+    "Current execution mode: " + plan.intent + ".",
+    modeInstruction[plan.intent],
+    "",
+    plan.deepResearch
+      ? "This is a deep-research request. Prefer multiple relevant sources, cross-check important claims, and clearly separate evidence from conclusions."
+      : "",
+    "",
+    "If the user asks for something that requires a capability not currently connected, say so plainly and provide the best useful next step instead of pretending.",
+    "",
+    "Be clear, practical, and concise.",
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
