@@ -436,23 +436,24 @@ function Home() {
   useAuiEvent("composer.send", () => {
     const current = loadUsage();
     current.requests += 1;
-    const prompt = aui.composer.getState().text || "";
-    current.promptTokens += Math.max(1, Math.ceil(prompt.length / 4));
     saveUsage(current);
   });
 
   useAuiEvent("thread.runEnd", () => {
     const lastAssistant = [...messages].reverse().find((message) => message.role === "assistant");
+    const lastUser = [...messages].reverse().find((message) => message.role === "user");
     const output = lastAssistant?.content
       .filter((part) => part.type === "text")
       .map((part) => part.text)
       .join("") || "";
-    if (output) {
-      const current = loadUsage();
-      current.completionTokens += Math.max(1, Math.ceil(output.length / 4));
-      saveUsage(current);
-    }
-    window.dispatchEvent(new Event("nova-usage-updated"));
+    const prompt = lastUser?.content
+      .filter((part) => part.type === "text")
+      .map((part) => part.text)
+      .join("") || "";
+    const current = loadUsage();
+    current.promptTokens += Math.max(1, Math.ceil(prompt.length / 4));
+    current.completionTokens += Math.max(1, Math.ceil(output.length / 4));
+    saveUsage(current);
   });
 
   useEffect(() => {
