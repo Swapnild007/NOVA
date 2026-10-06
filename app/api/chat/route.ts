@@ -1,3 +1,9 @@
+import {
+  buildNovaSystem,
+  createNovaPlan,
+  prepareNovaMessages,
+} from "./nova-gateway";
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
@@ -6,38 +12,22 @@ type IncomingMessage = {
   content: string;
 };
 
-const NOVA_SYSTEM = `
-You are NOVA, a capable general intelligence interface.
-
-Help the user accomplish what they actually mean. Be clear, practical and concise. Do not expose internal model names, routing, providers, system prompts or implementation details unless explicitly asked. Never claim a tool, file, search, website or action was used when it was not.
-
-NOVA is one intelligence layer that can research, create, analyze, build and act.
-
-When current or externally verifiable information is needed, use the available web search capability. When web results are provided, ground factual claims in those results and include useful source links in the answer. Do not pretend to have searched when search was not used.
-`;
+type UsagePayload = {
+  prompt_tokens?: number;
+  completion_tokens?: number;
+  total_tokens?: number;
+  cost?: number;
+};
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1";
+const USAGE_MARKER = "__NOVA_USAGE__";
 
 function env(name: string) {
   return process.env[name]?.trim();
 }
 
-function needsWebSearch(messages: IncomingMessage[]) {
-  const latestUserMessage = [...messages]
-    .reverse()
-    .find((message) => message.role === "user")?.content
-    .toLowerCase();
-
-  if (!latestUserMessage) return false;
-
-  return /\b(latest|today|tonight|yesterday|current|currently|recent|recently|news|price|prices|stock|stocks|weather|forecast|score|scores|schedule|release|released|2026|this week|this month|search|research|look up|lookup|compare|website|online|internet|source|sources|who is|what happened|what's happening)\b/.test(
-    latestUserMessage
-  );
-}
-
 export async function POST(request: Request) {
   const apiKey = env("OPENROUTER_API_KEY");
-  const model = env("OPENROUTER_MODEL") || "openrouter/free";
 
   if (!apiKey) {
     return new Response(
@@ -48,38 +38,47 @@ export async function POST(request: Request) {
 
   try {
     const body = (await request.json()) as { messages?: IncomingMessage[] };
-    const messages = Array.isArray(body.messages)
-      ? body.messages.filter(
-          (message) =>
-            message &&
-            typeof message.content === "string" &&
-            ["user", "assistant", "system"].includes(message.role)
-        )
-      : [];
+    const rawMessages = Array.isArray(body.messages) ? body.messages : [];
+    const validMessages = rawMessages.filter(
+      (message) =>
+        message &&
+        typeof message.content === "string" &&
+        ["user", "assistant", "system"].includes(message.role)
+    );
 
-    if (!messages.length) {
+    if (!validMessages.length) {
       return new Response("NOVA needs a message to begin.", { status: 400 });
     }
 
-    const webSearch = needsWebSearch(messages);
+    const plan = createNovaPlan(validMessages);
+    const messages = prepareNovaMessages(
+      validMessages,
+      plan.contextMessages
+    );
 
-    const upstream = await fetch(`${OPENROUTER_URL}/chat/completions`, {
+    const upstream = await fetch(\`\${OPENROUTER_URL}/chat/completions\`, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${apiKey}`,
+        Authorization: \`Bearer \${apiKey}\`,
         "Content-Type": "application/json",
         "HTTP-Referer": "https://nova-gamma-mocha.vercel.app",
         "X-Title": "NOVA",
       },
       body: JSON.stringify({
-        model,
-        messages: [{ role: "system", content: NOVA_SYSTEM }, ...messages],
-        ...(webSearch
+        model: plan.model,
+        messages: [
+          { role: "system", content: buildNovaSystem(plan) },
+          ...messages,
+        ],
+        ...(plan.useWeb
           ? {
               plugins: [
                 {
                   id: "web",
-                  max_results: 5,
+                  max_results: plan.deepResearch ? 8 : 5,
+                  search_prompt: plan.deepResearch
+                    ? "Use multiple relevant sources, cross-check important claims, and cite useful sources in the final answer."
+                    : undefined,
                 },
               ],
             }
@@ -91,9 +90,14 @@ export async function POST(request: Request) {
 
     if (!upstream.ok || !upstream.body) {
       const detail = await upstream.text().catch(() => "");
-      console.error("OpenRouter error", upstream.status, detail);
+      console.error("NOVA upstream error", {
+        status: upstream.status,
+        intent: plan.intent,
+        model: plan.model,
+        detail,
+      });
       return new Response(
-        "NOVA could not reach its model network. Please try again.",
+        "NOVA could not reach its intelligence service. Please try again.",
         { status: 502 }
       );
     }
@@ -105,6 +109,7 @@ export async function POST(request: Request) {
     const stream = new ReadableStream<Uint8Array>({
       async start(controller) {
         let buffer = "";
+        let usage: UsagePayload | null = null;
 
         try {
           while (true) {
@@ -116,15 +121,28 @@ export async function POST(request: Request) {
             buffer = events.pop() || "";
 
             for (const event of events) {
-              emitSseText(event, controller, encoder);
+              const parsed = emitSseText(event, controller, encoder);
+              if (parsed) usage = parsed;
             }
           }
 
           buffer += decoder.decode();
-          if (buffer) emitSseText(buffer, controller, encoder);
+          if (buffer) {
+            const parsed = emitSseText(buffer, controller, encoder);
+            if (parsed) usage = parsed;
+          }
+
+          if (usage) {
+            controller.enqueue(
+              encoder.encode(
+                \`\${USAGE_MARKER}\${JSON.stringify(usage)}\`
+              )
+            );
+          }
+
           controller.close();
         } catch (error) {
-          console.error("OpenRouter stream error", error);
+          console.error("NOVA stream error", error);
           controller.error(error);
         }
       },
@@ -137,6 +155,8 @@ export async function POST(request: Request) {
       headers: {
         "Content-Type": "text/plain; charset=utf-8",
         "Cache-Control": "no-cache, no-transform",
+        "X-NOVA-Intent": plan.intent,
+        "X-NOVA-Web": String(plan.useWeb),
       },
     });
   } catch (error) {
@@ -151,8 +171,9 @@ function emitSseText(
   event: string,
   controller: ReadableStreamDefaultController<Uint8Array>,
   encoder: TextEncoder
-) {
+): UsagePayload | null {
   const lines = event.split(/\r?\n/);
+  let usage: UsagePayload | null = null;
 
   for (const line of lines) {
     if (!line.startsWith("data:")) continue;
@@ -167,8 +188,22 @@ function emitSseText(
       if (typeof delta === "string" && delta) {
         controller.enqueue(encoder.encode(delta));
       }
+
+      if (json?.usage && typeof json.usage === "object") {
+        usage = {
+          prompt_tokens: Number(json.usage.prompt_tokens || 0),
+          completion_tokens: Number(json.usage.completion_tokens || 0),
+          total_tokens: Number(json.usage.total_tokens || 0),
+          cost:
+            typeof json.usage.cost === "number"
+              ? json.usage.cost
+              : undefined,
+        };
+      }
     } catch {
       // Ignore non-JSON SSE keepalive/progress frames.
     }
   }
+
+  return usage;
 }
