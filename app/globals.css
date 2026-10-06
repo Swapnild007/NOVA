@@ -390,3 +390,114 @@ h1 {
   color: var(--ink);
   margin-bottom: 3px;
 }
+
+.nova-markdown {
+  color: inherit;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+
+.nova-markdown > :first-child { margin-top: 0; }
+.nova-markdown > :last-child { margin-bottom: 0; }
+
+.nova-markdown h1,
+.nova-markdown h2,
+.nova-markdown h3,
+.nova-markdown h4 {
+  margin: 1.15em 0 .45em;
+  color: inherit;
+  line-height: 1.2;
+  letter-spacing: -.025em;
+}
+
+.nova-markdown h1 { font-size: 1.45em; }
+.nova-markdown h2 { font-size: 1.25em; }
+.nova-markdown h3 { font-size: 1.08em; }
+
+.nova-markdown p {
+  margin: .7em 0;
+}
+
+.nova-markdown ul,
+.nova-markdown ol {
+  margin: .7em 0;
+  padding-left: 1.45em;
+}
+
+.nova-markdown li {
+  margin: .3em 0;
+}
+
+.nova-markdown blockquote {
+  margin: .9em 0;
+  padding: .15em 0 .15em 1em;
+  border-left: 3px solid rgba(17,19,24,.18);
+  color: #626771;
+}
+
+.nova-markdown hr {
+  margin: 1.25em 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+
+.nova-markdown a {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: rgba(17,19,24,.3);
+  text-underline-offset: 3px;
+}
+
+.nova-markdown strong {
+  font-weight: 700;
+}
+
+.nova-markdown code {
+  padding: .14em .35em;
+  border-radius: 6px;
+  background: rgba(17,19,24,.06);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: .9em;
+}
+
+.nova-markdown pre {
+  margin: .9em 0;
+  padding: 14px 16px;
+  overflow-x: auto;
+  border-radius: 14px;
+  background: #17191f;
+  color: #f7f8fa;
+}
+
+.nova-markdown pre code {
+  padding: 0;
+  background: transparent;
+  font-size: .86em;
+}
+
+.nova-markdown table {
+  width: 100%;
+  margin: 1em 0;
+  border-collapse: collapse;
+  display: block;
+  overflow-x: auto;
+  font-size: .92em;
+}
+
+.nova-markdown th,
+.nova-markdown td {
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+  min-width: 120px;
+}
+
+.nova-markdown th {
+  background: rgba(17,19,24,.045);
+  font-weight: 700;
+}
+
+.message-assistant .message-text {
+  max-width: 100%;
+}
