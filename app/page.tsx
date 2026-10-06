@@ -163,7 +163,7 @@ function VoiceButton() {
       return;
     }
 
-    const recognition = new Recognition() as NovaSpeechRecognition;
+    const recognition = new Recognition() as unknown as NovaSpeechRecognition;
     recognition.continuous = false;
     recognition.interimResults = true;
     recognition.lang = localStorage.getItem("nova-voice-language") || "en-IN";
