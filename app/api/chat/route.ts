@@ -73,29 +73,29 @@ export async function POST(request: Request) {
 
     const reader = upstream.body.getReader();
     const decoder = new TextDecoder();
-    let buffer = "";
+    const encoder = new TextEncoder();
 
-    const stream = new ReadableStream({
-      async pull(controller) {
+    const stream = new ReadableStream<Uint8Array>({
+      async start(controller) {
+        let buffer = "";
+
         try {
-          const { done, value } = await reader.read();
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
 
-          if (done) {
-            if (buffer) {
-              emitSseText(buffer, controller);
+            buffer += decoder.decode(value, { stream: true });
+            const events = buffer.split("\n\n");
+            buffer = events.pop() || "";
+
+            for (const event of events) {
+              emitSseText(event, controller, encoder);
             }
-            controller.close();
-            return;
           }
 
-          buffer += decoder.decode(value, { stream: true });
-
-          const events = buffer.split("\n\n");
-          buffer = events.pop() || "";
-
-          for (const event of events) {
-            emitSseText(event, controller);
-          }
+          buffer += decoder.decode();
+          if (buffer) emitSseText(buffer, controller, encoder);
+          controller.close();
         } catch (error) {
           console.error("OpenRouter stream error", error);
           controller.error(error);
@@ -110,7 +110,6 @@ export async function POST(request: Request) {
       headers: {
         "Content-Type": "text/plain; charset=utf-8",
         "Cache-Control": "no-cache, no-transform",
-        Connection: "keep-alive",
       },
     });
   } catch (error) {
@@ -123,7 +122,8 @@ export async function POST(request: Request) {
 
 function emitSseText(
   event: string,
-  controller: ReadableStreamDefaultController<Uint8Array>
+  controller: ReadableStreamDefaultController<Uint8Array>,
+  encoder: TextEncoder
 ) {
   const lines = event.split("\n");
 
@@ -138,7 +138,7 @@ function emitSseText(
       const delta = json?.choices?.[0]?.delta?.content;
 
       if (typeof delta === "string" && delta) {
-        controller.enqueue(new TextEncoder().encode(delta));
+        controller.enqueue(encoder.encode(delta));
       }
     } catch {
       // Ignore non-JSON SSE keepalive/progress frames.
