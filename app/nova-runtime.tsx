@@ -32,20 +32,21 @@ const adapter: ChatModelAdapter = {
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
+    let fullText = "";
 
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
 
-      const text = decoder.decode(value, { stream: true });
-      if (text) {
-        yield { content: [{ type: "text", text }] };
+      fullText += decoder.decode(value, { stream: true });
+      if (fullText) {
+        yield { content: [{ type: "text", text: fullText }] };
       }
     }
 
-    const tail = decoder.decode();
-    if (tail) {
-      yield { content: [{ type: "text", text: tail }] };
+    fullText += decoder.decode();
+    if (fullText) {
+      yield { content: [{ type: "text", text: fullText }] };
     }
   },
 };
