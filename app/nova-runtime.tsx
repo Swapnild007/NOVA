@@ -8,6 +8,7 @@ import {
 
 const USAGE_MARKER = "__NOVA_USAGE__";
 const BUILD_MARKER = "__NOVA_PROJECT__";
+const PROJECT_STORAGE_KEY = "nova-active-project";
 
 type UsagePayload = {
   prompt_tokens?: number;
@@ -55,6 +56,16 @@ const adapter: ChatModelAdapter = {
           .map((part) => part.text)
           .join(""),
       })),
+      ...(typeof window !== "undefined"
+        ? (() => {
+            try {
+              const stored = localStorage.getItem(PROJECT_STORAGE_KEY);
+              return stored ? { project: JSON.parse(stored) } : {};
+            } catch {
+              return {};
+            }
+          })()
+        : {}),
     };
 
     const lastUser = [...payload.messages].reverse().find((message) => message.role === "user");
