@@ -4,8 +4,9 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1";
-const BUILD_TIMEOUT_MS = 150_000;
-const MAX_BUILDER_TOOL_STEPS = 8;
+const BUILD_TIMEOUT_MS = 55_000;
+const MAX_BUILDER_TOOL_STEPS = 5;
+const DEFAULT_BUILDER_MODEL = "nex-agi/nex-n2.5-mini:free";
 
 type IncomingMessage = {
   role: "user" | "assistant" | "system";
@@ -126,6 +127,7 @@ export async function POST(request: Request) {
         : null;
 
     const plan = createNovaPlan(messages);
+    const builderModel = env("OPENROUTER_BUILDER_MODEL") || DEFAULT_BUILDER_MODEL;
     const prepared = prepareNovaMessages(messages, Math.min(plan.contextMessages, 16));
 
     const system = [
@@ -163,7 +165,7 @@ export async function POST(request: Request) {
       },
       signal: AbortSignal.timeout(BUILD_TIMEOUT_MS),
       body: JSON.stringify({
-        model: plan.model,
+        model: builderModel,
         input: [
           { role: "system", content: [{ type: "input_text", text: system }] },
           {
@@ -183,12 +185,12 @@ export async function POST(request: Request) {
           type: "openrouter:shell",
           parameters: {
             engine: "openrouter",
-            timeout_ms: 120000,
-            max_output_length: 24000
+            timeout_ms: 20000,
+            max_output_length: 16000
           }
         }],
         ...(plan.fallbackModels.length ? { models: plan.fallbackModels } : {}),
-        max_output_tokens: 20000,
+        max_output_tokens: 14000,
         max_tool_calls: MAX_BUILDER_TOOL_STEPS,
         stop_server_tools_when: [{ type: "step_count_is", step_count: MAX_BUILDER_TOOL_STEPS }]
       }),
