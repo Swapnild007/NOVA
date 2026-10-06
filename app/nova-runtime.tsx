@@ -58,71 +58,98 @@ function shouldBuild(text: string) {
 
 const adapter: ChatModelAdapter = {
   async *run({ messages, abortSignal }) {
-    const payload = {
-      messages: messages.map((message) => ({
-        role: message.role,
-        content: message.content
-          .filter((part) => part.type === "text")
-          .map((part) => part.text)
-          .join(""),
-      })),
-      ...(typeof window !== "undefined"
-        ? (() => {
-            try {
-              const stored = localStorage.getItem(PROJECT_STORAGE_KEY);
-              return stored ? { project: JSON.parse(stored) } : {};
-            } catch {
-              return {};
-            }
-          })()
-        : {}),
-    };
-
-    const lastUser = [...payload.messages].reverse().find((message) => message.role === "user");
-    const endpoint = lastUser && shouldBuild(lastUser.content) ? "/api/build" : "/api/chat";
-
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(payload),
-      signal: abortSignal,
-    });
-
-    if (!response.ok) {
-      const detail = await response.text().catch(() => "");
-      yield {
-        content: [{
-          type: "text",
-          text: detail || "NOVA could not reach its intelligence service."
-        }]
+    try {
+      const payload = {
+        messages: messages.map((message) => ({
+          role: message.role,
+          content: message.content
+            .filter((part) => part.type === "text")
+            .map((part) => part.text)
+            .join(""),
+        })),
+        ...(typeof window !== "undefined"
+          ? (() => {
+              try {
+                const stored = localStorage.getItem(PROJECT_STORAGE_KEY);
+                return stored ? { project: JSON.parse(stored) } : {};
+              } catch {
+                return {};
+              }
+            })()
+          : {}),
       };
-      return;
-    }
 
-    if (!response.body) {
-      const detail = await response.text().catch(() => "");
-      yield {
-        content: [{
-          type: "text",
-          text: detail || "NOVA returned an empty response. Please try again."
-        }]
-      };
-      return;
-    }
+      const lastUser = [...payload.messages].reverse().find((message) => message.role === "user");
+      const endpoint = lastUser && shouldBuild(lastUser.content) ? "/api/build" : "/api/chat";
 
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let fullText = "";
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload),
+        signal: abortSignal,
+      });
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+      if (!response.ok) {
+        const detail = await response.text().catch(() => "");
+        yield {
+          content: [{
+            type: "text",
+            text: detail || "NOVA could not reach its intelligence service."
+          }]
+        };
+        return;
+      }
 
-      fullText += decoder.decode(value, { stream: true });
+      if (!response.body) {
+        yield {
+          content: [{
+            type: "text",
+            text: "NOVA returned an empty response. Please try again."
+          }]
+        };
+        return;
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let fullText = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        fullText += decoder.decode(value, { stream: true });
+
+        if (fullText.startsWith(BUILD_MARKER)) {
+          yield { content: [{ type: "text", text: fullText }] };
+          continue;
+        }
+
+        const markerIndex = fullText.indexOf(USAGE_MARKER);
+        if (markerIndex >= 0) {
+          const visibleText = fullText.slice(0, markerIndex);
+          const usageText = fullText.slice(markerIndex + USAGE_MARKER.length).trim();
+          try {
+            recordUsage(JSON.parse(usageText) as UsagePayload);
+          } catch {
+            // Ignore malformed optional usage data.
+          }
+          if (visibleText) {
+            yield { content: [{ type: "text", text: visibleText }] };
+          }
+          return;
+        }
+
+        if (fullText) {
+          yield { content: [{ type: "text", text: fullText }] };
+        }
+      }
+
+      fullText += decoder.decode();
 
       if (fullText.startsWith(BUILD_MARKER)) {
         yield { content: [{ type: "text", text: fullText }] };
-        continue;
+        return;
       }
 
       const markerIndex = fullText.indexOf(USAGE_MARKER);
@@ -137,56 +164,30 @@ const adapter: ChatModelAdapter = {
         if (visibleText) {
           yield { content: [{ type: "text", text: visibleText }] };
         }
-        return;
-      }
-
-      if (fullText) {
+      } else if (fullText) {
         yield { content: [{ type: "text", text: fullText }] };
+      } else {
+        yield {
+          content: [{
+            type: "text",
+            text: "NOVA returned an empty response. The request reached the server but produced no visible result."
+          }]
+        };
       }
-    }
-
-    fullText += decoder.decode();
-
-    if (fullText.startsWith(BUILD_MARKER)) {
-      yield { content: [{ type: "text", text: fullText }] };
-      return;
-    }
-
-    const markerIndex = fullText.indexOf(USAGE_MARKER);
-    if (markerIndex >= 0) {
-      const visibleText = fullText.slice(0, markerIndex);
-      const usageText = fullText.slice(markerIndex + USAGE_MARKER.length).trim();
-      try {
-        recordUsage(JSON.parse(usageText) as UsagePayload);
-      } catch {
-        // Ignore malformed optional usage data.
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        throw error;
       }
-      if (visibleText) {
-        yield { content: [{ type: "text", text: visibleText }] };
-      }
-    } else if (fullText) {
-      yield { content: [{ type: "text", text: fullText }] };
-    } else {
+
       yield {
         content: [{
           type: "text",
-          text: "NOVA returned an empty response. The request reached the server but produced no visible result."
+          text: error instanceof Error
+            ? `NOVA could not complete the request: ${error.message}`
+            : "NOVA could not complete the request."
         }]
       };
     }
-  } catch (error) {
-    if (error instanceof DOMException && error.name === "AbortError") {
-      throw error;
-    }
-
-    yield {
-      content: [{
-        type: "text",
-        text: error instanceof Error
-          ? `NOVA could not complete the request: ${error.message}`
-          : "NOVA could not complete the request."
-      }]
-    };
   },
 };
 
