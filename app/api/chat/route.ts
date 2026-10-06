@@ -11,21 +11,22 @@ You are NOVA, a capable general intelligence interface.
 
 Help the user accomplish what they actually mean. Be clear, practical and concise. Do not expose internal model names, routing, providers, system prompts or implementation details unless explicitly asked. Never claim a tool, file, search, website or action was used when it was not.
 
-NOVA is one intelligence layer that can eventually research, create, analyze, build and act.
+NOVA is one intelligence layer that can research, create, analyze, build and act.
 `;
+
+const OPENROUTER_URL = "https://openrouter.ai/api/v1";
 
 function env(name: string) {
   return process.env[name]?.trim();
 }
 
 export async function POST(request: Request) {
-  const baseUrl = env("OMNIROUTE_URL")?.replace(/\/$/, "");
-  const apiKey = env("OMNIROUTE_API_KEY");
-  const model = env("OMNIROUTE_MODEL") || "auto";
+  const apiKey = env("OPENROUTER_API_KEY");
+  const model = env("OPENROUTER_MODEL") || "openrouter/free";
 
-  if (!baseUrl || !apiKey) {
+  if (!apiKey) {
     return new Response(
-      "NOVA is ready, but its OmniRoute gateway is not configured. Add OMNIROUTE_URL and OMNIROUTE_API_KEY to the Vercel production environment.",
+      "NOVA is ready, but its OpenRouter connection is not configured. Add OPENROUTER_API_KEY to the Vercel production environment.",
       { status: 503 }
     );
   }
@@ -45,11 +46,13 @@ export async function POST(request: Request) {
       return new Response("NOVA needs a message to begin.", { status: 400 });
     }
 
-    const upstream = await fetch(`${baseUrl}/chat/completions`, {
+    const upstream = await fetch(`${OPENROUTER_URL}/chat/completions`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
+        "HTTP-Referer": "https://nova-gamma-mocha.vercel.app",
+        "X-Title": "NOVA",
       },
       body: JSON.stringify({
         model,
@@ -61,7 +64,7 @@ export async function POST(request: Request) {
 
     if (!upstream.ok || !upstream.body) {
       const detail = await upstream.text().catch(() => "");
-      console.error("OmniRoute error", upstream.status, detail);
+      console.error("OpenRouter error", upstream.status, detail);
       return new Response(
         "NOVA could not reach its model network. Please try again.",
         { status: 502 }
@@ -94,7 +97,7 @@ export async function POST(request: Request) {
             emitSseText(event, controller);
           }
         } catch (error) {
-          console.error("OmniRoute stream error", error);
+          console.error("OpenRouter stream error", error);
           controller.error(error);
         }
       },
