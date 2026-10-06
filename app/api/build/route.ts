@@ -199,7 +199,7 @@ export async function POST(request: Request) {
 
     if (!upstream.ok) {
       console.error("NOVA autonomous builder upstream error", await upstream.text().catch(() => ""));
-      return new Response("NOVA could not start the build workspace right now.", { status: 502 });
+      return new Response("NOVA could not start the build workspace right now. Check the builder connection and try again.", { status: 200 });
     }
 
     const json = await upstream.json();
@@ -236,7 +236,7 @@ export async function POST(request: Request) {
       });
       return new Response(
         "NOVA's builder stopped before producing the project artifact (" + reason + ").",
-        { status: 502 }
+        { status: 200 }
       );
     }
 
@@ -268,6 +268,6 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     console.error("NOVA autonomous builder error", error);
-    return new Response("NOVA's autonomous builder could not complete this build.", { status: 503 });
+    return new Response("NOVA's autonomous builder could not complete this build. The request was stopped safely. Try the same build again once.", { status: 200 });
   }
 }
