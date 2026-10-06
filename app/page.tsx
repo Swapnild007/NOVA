@@ -654,9 +654,7 @@ function Home() {
       }
 
       setAttachment(next);
-      aui.composer.setText(
-        aui.composer.getState?.()?.text || `Please analyze the attached file: ${file.name}`
-      );
+      aui.composer.setText(`Please analyze the attached file: ${file.name}`);
       setComposerMenuOpen(false);
     };
     reader.readAsDataURL(file);
