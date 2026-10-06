@@ -84,6 +84,7 @@ export async function POST(request: Request) {
             }
           : {}),
         stream: true,
+        usage: { include: true },
       }),
       cache: "no-store",
     });
