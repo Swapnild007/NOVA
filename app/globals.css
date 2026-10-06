@@ -395,6 +395,76 @@ h1 {
   color: var(--bg);
 }
 
+.tool-button.is-active {
+  background: var(--ink);
+  color: var(--bg);
+}
+
+.composer-menu-wrap {
+  position: relative;
+}
+
+.composer-menu {
+  position: absolute;
+  left: 0;
+  bottom: 44px;
+  z-index: 50;
+  width: min(300px, calc(100vw - 44px));
+  padding: 7px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface-strong);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(26px);
+}
+
+.composer-menu button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 10px;
+  border-radius: 13px;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.composer-menu button:hover {
+  background: var(--surface-soft);
+}
+
+.composer-menu-icon {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--surface-soft);
+  color: var(--ink);
+  font-size: 17px;
+}
+
+.composer-menu button span:nth-child(2) {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.composer-menu strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.composer-menu small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
 .send-button {
   width: 42px;
   height: 42px;
