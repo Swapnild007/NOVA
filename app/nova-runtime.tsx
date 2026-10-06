@@ -88,9 +88,26 @@ const adapter: ChatModelAdapter = {
       signal: abortSignal,
     });
 
-    if (!response.ok || !response.body) {
+    if (!response.ok) {
       const detail = await response.text().catch(() => "");
-      throw new Error(detail || "NOVA could not reach its intelligence service.");
+      yield {
+        content: [{
+          type: "text",
+          text: detail || "NOVA could not reach its intelligence service."
+        }]
+      };
+      return;
+    }
+
+    if (!response.body) {
+      const detail = await response.text().catch(() => "");
+      yield {
+        content: [{
+          type: "text",
+          text: detail || "NOVA returned an empty response. Please try again."
+        }]
+      };
+      return;
     }
 
     const reader = response.body.getReader();
@@ -149,7 +166,27 @@ const adapter: ChatModelAdapter = {
       }
     } else if (fullText) {
       yield { content: [{ type: "text", text: fullText }] };
+    } else {
+      yield {
+        content: [{
+          type: "text",
+          text: "NOVA returned an empty response. The request reached the server but produced no visible result."
+        }]
+      };
     }
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw error;
+    }
+
+    yield {
+      content: [{
+        type: "text",
+        text: error instanceof Error
+          ? `NOVA could not complete the request: ${error.message}`
+          : "NOVA could not complete the request."
+      }]
+    };
   },
 };
 
