@@ -67,7 +67,12 @@ function formatNumber(value: number) {
 }
 
 function formatUsd(value: number) {
-  return value < 0.0001 ? "$0.00" : `$${value.toFixed(4)}`;
+  return value < 0.0001 ? "$0.00" : `${value.toFixed(4)}`;
+}
+
+function readLocal(key: string, fallback: string) {
+  if (typeof window === "undefined") return fallback;
+  return localStorage.getItem(key) ?? fallback;
 }
 
 function loadUsage() {
@@ -197,9 +202,9 @@ function SettingsModal({
     if (typeof window === "undefined") return "system";
     return (localStorage.getItem("nova-theme") as Theme) || "system";
   });
-  const [memory, setMemory] = useState(() => localStorage.getItem("nova-memory") !== "off");
-  const [training, setTraining] = useState(() => localStorage.getItem("nova-training") !== "off");
-  const [temporary, setTemporary] = useState(() => localStorage.getItem("nova-temporary") === "on");
+  const [memory, setMemory] = useState(() => readLocal("nova-memory", "on") !== "off");
+  const [training, setTraining] = useState(() => readLocal("nova-training", "on") !== "off");
+  const [temporary, setTemporary] = useState(() => readLocal("nova-temporary", "off") === "on");
   const [usage, setUsage] = useState(loadUsage);
 
   useEffect(() => {
@@ -277,7 +282,7 @@ function SettingsModal({
               </SettingRow>
               <SettingRow title="Language" description="Speech recognition language." value="">
                 <select
-                  value={localStorage.getItem("nova-voice-language") || "en-IN"}
+                  value={readLocal("nova-voice-language", "en-IN")}
                   onChange={(event) => localStorage.setItem("nova-voice-language", event.target.value)}
                 >
                   <option value="en-IN">English (India)</option>
@@ -410,6 +415,7 @@ function Home() {
   const aui = useAui();
   const isEmpty = useAuiState((state) => state.thread.isEmpty);
   const isRunning = useAuiState((state) => state.thread.isRunning);
+  const messages = useAuiState((state) => state.thread.messages);
   const [intro, setIntro] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
   const [contextOpen, setContextOpen] = useState(false);
@@ -427,7 +433,25 @@ function Home() {
     document.documentElement.dataset.theme = stored;
   }, []);
 
+  useAuiEvent("composer.send", () => {
+    const current = loadUsage();
+    current.requests += 1;
+    const prompt = aui.composer.getState().text || "";
+    current.promptTokens += Math.max(1, Math.ceil(prompt.length / 4));
+    saveUsage(current);
+  });
+
   useAuiEvent("thread.runEnd", () => {
+    const lastAssistant = [...messages].reverse().find((message) => message.role === "assistant");
+    const output = lastAssistant?.content
+      .filter((part) => part.type === "text")
+      .map((part) => part.text)
+      .join("") || "";
+    if (output) {
+      const current = loadUsage();
+      current.completionTokens += Math.max(1, Math.ceil(output.length / 4));
+      saveUsage(current);
+    }
     window.dispatchEvent(new Event("nova-usage-updated"));
   });
 
