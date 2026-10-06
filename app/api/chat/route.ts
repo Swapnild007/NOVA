@@ -21,9 +21,26 @@ type UsagePayload = {
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1";
 const USAGE_MARKER = "__NOVA_USAGE__";
+const MAX_MESSAGES = 40;
 
 function env(name: string) {
   return process.env[name]?.trim();
+}
+
+function sanitizeMessages(rawMessages: unknown): IncomingMessage[] {
+  if (!Array.isArray(rawMessages)) return [];
+
+  return rawMessages
+    .filter(
+      (message): message is IncomingMessage =>
+        !!message &&
+        typeof message === "object" &&
+        typeof (message as IncomingMessage).content === "string" &&
+        ["user", "assistant", "system"].includes(
+          (message as IncomingMessage).role
+        )
+    )
+    .slice(-MAX_MESSAGES);
 }
 
 export async function POST(request: Request) {
@@ -37,14 +54,8 @@ export async function POST(request: Request) {
   }
 
   try {
-    const body = (await request.json()) as { messages?: IncomingMessage[] };
-    const rawMessages = Array.isArray(body.messages) ? body.messages : [];
-    const validMessages = rawMessages.filter(
-      (message) =>
-        message &&
-        typeof message.content === "string" &&
-        ["user", "assistant", "system"].includes(message.role)
-    );
+    const body = (await request.json()) as { messages?: unknown };
+    const validMessages = sanitizeMessages(body.messages);
 
     if (!validMessages.length) {
       return new Response("NOVA needs a message to begin.", { status: 400 });
@@ -56,45 +67,59 @@ export async function POST(request: Request) {
       plan.contextMessages
     );
 
-    const upstream = await fetch(`${OPENROUTER_URL}/chat/completions`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://nova-gamma-mocha.vercel.app",
-        "X-Title": "NOVA",
-      },
-      body: JSON.stringify({
-        model: plan.model,
-        messages: [
-          { role: "system", content: buildNovaSystem(plan) },
-          ...messages,
-        ],
-        ...(plan.useWeb
-          ? {
-              plugins: [
-                {
-                  id: "web",
-                  max_results: plan.deepResearch ? 8 : 5,
-                  search_prompt: plan.deepResearch
-                    ? "Use multiple relevant sources, cross-check important claims, and cite useful sources in the final answer."
-                    : undefined,
-                },
-              ],
-            }
-          : {}),
-        stream: true,
-        usage: { include: true },
-      }),
-      cache: "no-store",
-    });
+    if (!messages.length) {
+      return new Response("NOVA needs a message to begin.", { status: 400 });
+    }
+
+    const requestBody: Record<string, unknown> = {
+      model: plan.model,
+      messages: [
+        { role: "system", content: buildNovaSystem(plan) },
+        ...messages,
+      ],
+      stream: true,
+    };
+
+    if (plan.fallbackModels.length) {
+      requestBody.models = plan.fallbackModels;
+    }
+
+    if (plan.useWeb) {
+      requestBody.plugins = [
+        {
+          id: "web",
+          max_results: plan.deepResearch ? 8 : 5,
+          ...(plan.deepResearch
+            ? {
+                search_prompt:
+                  "Use multiple relevant sources, cross-check important claims, and cite useful sources in the final answer.",
+              }
+            : {}),
+        },
+      ];
+    }
+
+    const upstream = await fetch(
+      OPENROUTER_URL + "/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + apiKey,
+          "Content-Type": "application/json",
+          "HTTP-Referer": "https://nova-gamma-mocha.vercel.app",
+          "X-Title": "NOVA",
+        },
+        body: JSON.stringify(requestBody),
+        cache: "no-store",
+      }
+    );
 
     if (!upstream.ok || !upstream.body) {
       const detail = await upstream.text().catch(() => "");
       console.error("NOVA upstream error", {
         status: upstream.status,
         intent: plan.intent,
-        model: plan.model,
+        web: plan.useWeb,
         detail,
       });
       return new Response(
@@ -136,7 +161,7 @@ export async function POST(request: Request) {
           if (usage) {
             controller.enqueue(
               encoder.encode(
-                `${USAGE_MARKER}${JSON.stringify(usage)}`
+                USAGE_MARKER + JSON.stringify(usage)
               )
             );
           }
