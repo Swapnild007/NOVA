@@ -2,37 +2,51 @@
 
 NOVA is being built as an intelligence workspace rather than a conventional chatbot.
 
-## Foundation
+## Architecture
 
-- Next.js
-- React
-- assistant-ui runtime and primitives
-- GitHub as source control
-- GitHub Pages static export for the first public shell
+NOVA is intentionally split into layers:
 
-The interface is deliberately separated from the model layer so real model providers, tools, files, memory and actions can be connected without rebuilding the product experience.
+1. **Experience**: desktop/mobile workspace UI.
+2. **Cognition**: intent detection, planning, capability selection, verification, memory-ready context.
+3. **Capabilities**: talk, research, create, analyze, build, files, vision, voice and actions.
+4. **NOVA Shield**: prompt-injection awareness, secret redaction and trust-boundary rules.
+5. **Intelligence gateway**: one OpenAI-compatible gateway credential, with model routing handled outside NOVA.
+6. **Evaluation**: regression cases for reasoning, research, build, analysis, security and actions.
+
+The goal is one NOVA intelligence, not a collection of provider-specific experiences.
+
+## Gateway
+
+NOVA is designed to use one server-side gateway credential. It must not contain direct Gemini, Groq, OpenRouter, or other provider API keys.
+
+For Cheaper Inference / OmniRoute-compatible routing:
+
+- Base URL: `https://api.cheaperinference.com/v1`
+- Chat endpoint: `/chat/completions`
+- Model: an exact model ID from the gateway's live catalog
+- Routing: `X-CI-Route: auto`
+- Optional zero-data-retention mode: `NOVA_GATEWAY_ZDR=true`
+
+Do not put gateway credentials in client-side code.
 
 ## Development
 
 ```bash
 npm install
+npm run build
 npm run dev
 ```
 
-## Direction
+## Current build principle
 
-NOVA should feel like one intelligence with many capabilities. Internal routing, agents and providers remain implementation details and are not exposed as the primary user experience.
+NOVA is being strengthened before deployment. The project should pass capability and regression validation before production deployment or provider spending is treated as the next step.
 
+The autonomous builder currently performs static project validation only. It must not claim that a browser runtime test, shell command, deployment, or external action occurred unless a real connected execution capability performed it.
 
-## Intelligence continuity
+## Training direction
 
-NOVA uses an OpenAI-compatible intelligence gateway when `NOVA_GATEWAY_URL` is configured. OmniRoute is the preferred gateway because it provides provider/model routing, retries and fallback behavior. If the gateway itself is unavailable, NOVA falls back to its configured direct providers instead of stopping the conversation.
+NOVA is not being trained as a foundation model yet. Its first training layer is a structured cognitive dataset:
 
-Routing defaults:
-- general/create/act: `auto`
-- build: `auto/coding`
-- research/analyze/plan: `auto/smart`
+`Task -> Intent -> Plan -> Capability -> Execution -> Verification -> Result`
 
-The gateway is infrastructure, not part of NOVA's user-facing product model. Providers and models remain hidden from the user.
-
-For production, deploy OmniRoute separately from the Vercel NOVA application and set `NOVA_GATEWAY_URL` and `NOVA_GATEWAY_API_KEY` in Vercel. Keep at least one direct provider configured as an emergency path.
+Successful traces, failure cases, security cases and user feedback become evaluation/training data. Fine-tuning or preference optimization comes later, after enough high-quality proprietary examples exist.
