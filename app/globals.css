@@ -340,3 +340,53 @@ h1 {
     transition-duration: .01ms !important;
   }
 }
+
+.menu-wrap {
+  position: relative;
+}
+
+.workspace-menu {
+  position: absolute;
+  top: 48px;
+  right: 0;
+  z-index: 10;
+  width: 190px;
+  padding: 7px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(255,255,255,.92);
+  box-shadow: 0 18px 50px rgba(24,28,38,.14);
+  backdrop-filter: blur(24px);
+}
+
+.workspace-menu button {
+  display: block;
+  width: 100%;
+  padding: 11px 12px;
+  border-radius: 11px;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.workspace-menu button:hover {
+  background: rgba(17,19,24,.06);
+}
+
+.context-panel {
+  margin: 4px 8px 8px;
+  padding: 12px 14px;
+  border-radius: 15px;
+  background: #f2f3f5;
+  color: #555a63;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.context-panel strong {
+  display: block;
+  color: var(--ink);
+  margin-bottom: 3px;
+}
