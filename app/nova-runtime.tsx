@@ -7,8 +7,7 @@ import {
 } from "@assistant-ui/react";
 
 const USAGE_MARKER = "__NOVA_USAGE__";
-const BUILD_MARKER = "__NOVA_PROJECT__";
-const PROJECT_STORAGE_KEY = "nova-active-project";
+const PENDING_ATTACHMENT_KEY = "nova-pending-attachment";
 
 type UsagePayload = {
   prompt_tokens?: number;
@@ -16,6 +15,18 @@ type UsagePayload = {
   total_tokens?: number;
   cost?: number;
 };
+
+type PendingAttachment = {
+  name: string;
+  type: string;
+  dataUrl: string;
+  size: number;
+};
+
+type NovaContentPart =
+  | { type: "text"; text: string }
+  | { type: "image_url"; image_url: { url: string } }
+  | { type: "file"; file: { filename: string; file_data: string } };
 
 function recordUsage(payload: UsagePayload) {
   try {
@@ -41,116 +52,120 @@ function recordUsage(payload: UsagePayload) {
   }
 }
 
-function shouldBuild(text: string) {
-  const normalized = text.trim();
-
-  // Route explicit product-building requests to the autonomous builder.
-  // The previous rule required the word "app/website/etc." later in the
-  // sentence, so requests such as "Build a polished expense tracker" fell
-  // through to the normal chat endpoint and NOVA simply wrote code as prose.
-  if (/\b(build|create|make|develop)\b/i.test(normalized)) {
-    return /\b(app|application|website|web app|web application|site|dashboard|landing page|tool|frontend|tracker|calculator|game|portfolio|editor|crm|kanban|marketplace|ecommerce|booking|form|todo|planner|workspace|portal|platform|interface|ui|project)\b/i.test(normalized)
-      || /\b(build|create|make|develop)\b.{0,40}\b(from scratch|responsive|interactive|production|polished|functional)\b/i.test(normalized);
+function getPendingAttachment(): PendingAttachment | null {
+  try {
+    const raw = localStorage.getItem(PENDING_ATTACHMENT_KEY);
+    if (!raw) return null;
+    const attachment = JSON.parse(raw) as PendingAttachment;
+    if (!attachment?.name || !attachment?.dataUrl) return null;
+    return attachment;
+  } catch {
+    return null;
   }
+}
 
-  return false;
+function textFromDataUrl(dataUrl: string) {
+  const comma = dataUrl.indexOf(",");
+  if (comma < 0) return "";
+  try {
+    return decodeURIComponent(
+      atob(dataUrl.slice(comma + 1))
+        .split("")
+        .map((char) => "%" + char.charCodeAt(0).toString(16).padStart(2, "0"))
+        .join("")
+    );
+  } catch {
+    return "";
+  }
 }
 
 const adapter: ChatModelAdapter = {
   async *run({ messages, abortSignal }) {
-    try {
-      const payload = {
-        messages: messages.map((message) => ({
+    const pendingAttachment = getPendingAttachment();
+
+    const outgoingMessages = messages.map((message, index) => {
+      const text = message.content
+        .filter((part) => part.type === "text")
+        .map((part) => part.text)
+        .join("");
+
+      if (index !== messages.length - 1 || message.role !== "user" || !pendingAttachment) {
+        return {
           role: message.role,
-          content: message.content
-            .filter((part) => part.type === "text")
-            .map((part) => part.text)
-            .join(""),
-        })),
-        ...(typeof window !== "undefined"
-          ? (() => {
-              try {
-                const stored = localStorage.getItem(PROJECT_STORAGE_KEY);
-                return stored ? { project: JSON.parse(stored) } : {};
-              } catch {
-                return {};
-              }
-            })()
-          : {}),
+          content: text,
+        };
+      }
+
+      const isImage = /^image\/(png|jpe?g|webp)$/i.test(pendingAttachment.type);
+      const isPdf = pendingAttachment.type === "application/pdf";
+
+      if (isImage) {
+        return {
+          role: message.role,
+          content: [
+            { type: "text", text },
+            {
+              type: "image_url",
+              image_url: { url: pendingAttachment.dataUrl },
+            },
+          ] satisfies NovaContentPart[],
+        };
+      }
+
+      if (isPdf) {
+        return {
+          role: message.role,
+          content: [
+            { type: "text", text },
+            {
+              type: "file",
+              file: {
+                filename: pendingAttachment.name,
+                file_data: pendingAttachment.dataUrl,
+              },
+            },
+          ] satisfies NovaContentPart[],
+        };
+      }
+
+      const extracted = textFromDataUrl(pendingAttachment.dataUrl);
+      return {
+        role: message.role,
+        content: extracted
+          ? [
+              {
+                type: "text",
+                text: \`\${text}\n\nAttached file: \${pendingAttachment.name}\n\n\${extracted}\`,
+              },
+            ]
+          : text,
       };
+    });
 
-      const lastUser = [...payload.messages].reverse().find((message) => message.role === "user");
-      const endpoint = lastUser && shouldBuild(lastUser.content) ? "/api/build" : "/api/chat";
+    localStorage.removeItem(PENDING_ATTACHMENT_KEY);
+    window.dispatchEvent(new Event("nova-attachment-consumed"));
 
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(payload),
-        signal: abortSignal,
-      });
+    const response = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ messages: outgoingMessages }),
+      signal: abortSignal,
+    });
 
-      if (!response.ok) {
-        const detail = await response.text().catch(() => "");
-        yield {
-          content: [{
-            type: "text",
-            text: detail || "NOVA could not reach its intelligence service."
-          }]
-        };
-        return;
-      }
+    if (!response.ok || !response.body) {
+      const detail = await response.text().catch(() => "");
+      throw new Error(detail || "NOVA could not reach its intelligence service.");
+    }
 
-      if (!response.body) {
-        yield {
-          content: [{
-            type: "text",
-            text: "NOVA returned an empty response. Please try again."
-          }]
-        };
-        return;
-      }
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let fullText = "";
 
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let fullText = "";
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        fullText += decoder.decode(value, { stream: true });
-
-        if (fullText.startsWith(BUILD_MARKER)) {
-          yield { content: [{ type: "text", text: fullText }] };
-          continue;
-        }
-
-        const markerIndex = fullText.indexOf(USAGE_MARKER);
-        if (markerIndex >= 0) {
-          const visibleText = fullText.slice(0, markerIndex);
-          const usageText = fullText.slice(markerIndex + USAGE_MARKER.length).trim();
-          try {
-            recordUsage(JSON.parse(usageText) as UsagePayload);
-          } catch {
-            // Ignore malformed optional usage data.
-          }
-          if (visibleText) {
-            yield { content: [{ type: "text", text: visibleText }] };
-          }
-          return;
-        }
-
-        if (fullText) {
-          yield { content: [{ type: "text", text: fullText }] };
-        }
-      }
-
-      fullText += decoder.decode();
-
-      if (fullText.startsWith(BUILD_MARKER)) {
-        yield { content: [{ type: "text", text: fullText }] };
-        return;
-      }
+      fullText += decoder.decode(value, { stream: true });
 
       const markerIndex = fullText.indexOf(USAGE_MARKER);
       if (markerIndex >= 0) {
@@ -164,29 +179,30 @@ const adapter: ChatModelAdapter = {
         if (visibleText) {
           yield { content: [{ type: "text", text: visibleText }] };
         }
-      } else if (fullText) {
-        yield { content: [{ type: "text", text: fullText }] };
-      } else {
-        yield {
-          content: [{
-            type: "text",
-            text: "NOVA returned an empty response. The request reached the server but produced no visible result."
-          }]
-        };
-      }
-    } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") {
-        throw error;
+        return;
       }
 
-      yield {
-        content: [{
-          type: "text",
-          text: error instanceof Error
-            ? `NOVA could not complete the request: ${error.message}`
-            : "NOVA could not complete the request."
-        }]
-      };
+      if (fullText) {
+        yield { content: [{ type: "text", text: fullText }] };
+      }
+    }
+
+    fullText += decoder.decode();
+
+    const markerIndex = fullText.indexOf(USAGE_MARKER);
+    if (markerIndex >= 0) {
+      const visibleText = fullText.slice(0, markerIndex);
+      const usageText = fullText.slice(markerIndex + USAGE_MARKER.length).trim();
+      try {
+        recordUsage(JSON.parse(usageText) as UsagePayload);
+      } catch {
+        // Ignore malformed optional usage data.
+      }
+      if (visibleText) {
+        yield { content: [{ type: "text", text: visibleText }] };
+      }
+    } else if (fullText) {
+      yield { content: [{ type: "text", text: fullText }] };
     }
   },
 };
