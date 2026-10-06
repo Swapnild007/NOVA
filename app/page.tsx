@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AuiIf,
   ComposerPrimitive,
+  ErrorPrimitive,
   MessagePrimitive,
   ThreadPrimitive,
   useAui,
@@ -213,6 +214,7 @@ function saveUsage(usage: {
 
 function Message() {
   const message = useAuiState((state) => state.message);
+  const isRunning = useAuiState((state) => state.thread.isRunning);
   const text = message.content
     .filter((part) => part.type === "text")
     .map((part) => part.text)
@@ -226,13 +228,30 @@ function Message() {
     window.speechSynthesis.speak(utterance);
   };
 
-  if (!text) return null;
+  if (!text) {
+    if (message.role !== "assistant" || !isRunning) return null;
+
+    return (
+      <MessagePrimitive.Root className="message message-assistant">
+        <div className="message-head">
+          <div className="message-label">NOVA</div>
+        </div>
+        <div className="project-building">Working on it…</div>
+        <ErrorPrimitive.Root className="message-error">
+          <ErrorPrimitive.Message />
+        </ErrorPrimitive.Root>
+      </MessagePrimitive.Root>
+    );
+  }
 
   const project = parseNovaProject(text);
   if (text.startsWith(BUILD_MARKER)) {
     return (
       <MessagePrimitive.Root className="message message-assistant">
         {project ? <ProjectArtifact project={project} /> : <div className="project-building">Building your workspace…</div>}
+        <ErrorPrimitive.Root className="message-error">
+          <ErrorPrimitive.Message />
+        </ErrorPrimitive.Root>
       </MessagePrimitive.Root>
     );
   }
@@ -252,6 +271,9 @@ function Message() {
       <div className="message-text">
         {message.role === "assistant" ? <NovaMarkdown>{text}</NovaMarkdown> : text}
       </div>
+      <ErrorPrimitive.Root className="message-error">
+        <ErrorPrimitive.Message />
+      </ErrorPrimitive.Root>
     </MessagePrimitive.Root>
   );
 }
@@ -643,7 +665,11 @@ function Home() {
         </AuiIf>
 
         <ThreadPrimitive.Root className="thread">
-          <ThreadPrimitive.Viewport className="thread-viewport">
+          <ThreadPrimitive.Viewport
+            className="thread-viewport"
+            turnAnchor="top"
+            scrollToBottomOnRunStart
+          >
             <ThreadPrimitive.Messages>
               {() => <Message />}
             </ThreadPrimitive.Messages>
