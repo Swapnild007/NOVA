@@ -36,9 +36,6 @@ function gatewayModel(plan: NovaGatewayPlan) {
     case "analyze":
     case "plan":
       return "auto/smart";
-    case "general":
-    case "create":
-    case "act":
     default:
       return "auto";
   }
@@ -76,11 +73,14 @@ async function requestOmniRoute(
   const apiKey = env("NOVA_GATEWAY_API_KEY");
 
   try {
-    const { plugins: _plugins, ...omniBody } = requestBody;\n\n    const response = await fetch(baseUrl + "/chat/completions", {
+    const omniBody = { ...requestBody };
+    delete omniBody.plugins;
+
+    const response = await fetch(baseUrl + "/chat/completions", {
       method: "POST",
       headers: gatewayHeaders(apiKey),
       body: JSON.stringify({
-        ...requestBody,
+        ...omniBody,
         model,
       }),
       cache: "no-store",
@@ -121,11 +121,9 @@ export async function requestNovaIntelligence(
   const omni = await requestOmniRoute(plan, requestBody);
   if (omni) return omni;
 
-  const directBody = { ...requestBody };
-
   const direct: NovaProviderAttempt | null = await requestNovaProvider(
     plan,
-    directBody
+    requestBody
   );
 
   if (!direct) return null;
