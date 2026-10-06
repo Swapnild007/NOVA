@@ -76,7 +76,7 @@ async function requestOmniRoute(
   const apiKey = env("NOVA_GATEWAY_API_KEY");
 
   try {
-    const response = await fetch(baseUrl + "/chat/completions", {
+    const { plugins: _plugins, ...omniBody } = requestBody;\n\n    const response = await fetch(baseUrl + "/chat/completions", {
       method: "POST",
       headers: gatewayHeaders(apiKey),
       body: JSON.stringify({
