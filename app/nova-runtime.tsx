@@ -42,8 +42,18 @@ function recordUsage(payload: UsagePayload) {
 }
 
 function shouldBuild(text: string) {
-  return /\b(build|create|make|develop|code)\b.*\b(app|application|website|web app|web application|site|dashboard|landing page|tool|frontend)\b/i.test(text)
-    || /\b(build|create|make)\b\s+(me\s+)?(an?\s+)?(app|website|web app|web application|site)\b/i.test(text);
+  const normalized = text.trim();
+
+  // Route explicit product-building requests to the autonomous builder.
+  // The previous rule required the word "app/website/etc." later in the
+  // sentence, so requests such as "Build a polished expense tracker" fell
+  // through to the normal chat endpoint and NOVA simply wrote code as prose.
+  if (/\b(build|create|make|develop)\b/i.test(normalized)) {
+    return /\b(app|application|website|web app|web application|site|dashboard|landing page|tool|frontend|tracker|calculator|game|portfolio|editor|crm|kanban|marketplace|ecommerce|booking|form|todo|planner|workspace|portal|platform|interface|ui|project)\b/i.test(normalized)
+      || /\b(build|create|make|develop)\b.{0,40}\b(from scratch|responsive|interactive|production|polished|functional)\b/i.test(normalized);
+  }
+
+  return false;
 }
 
 const adapter: ChatModelAdapter = {
