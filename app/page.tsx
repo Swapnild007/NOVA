@@ -71,6 +71,7 @@ type NovaSpeechWindow = Window & {
 };
 
 const BUILD_MARKER = "__NOVA_PROJECT__";
+const PROJECT_STORAGE_KEY = "nova-active-project";
 
 type NovaProjectFile = { path: string; content: string };
 type NovaProject = { name: string; summary: string; files: NovaProjectFile[] };
@@ -101,6 +102,21 @@ function ProjectArtifact({ project }: { project: NovaProject }) {
   const [view, setView] = useState<"preview" | "code">("preview");
   const active = files.find((file) => file.path === selected) || files[0];
   const preview = useMemo(() => buildPreview(files), [files]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        PROJECT_STORAGE_KEY,
+        JSON.stringify({
+          name: project.name,
+          summary: project.summary,
+          files,
+        })
+      );
+    } catch {
+      // Local persistence is optional and must never interrupt editing.
+    }
+  }, [project.name, project.summary, files]);
 
   const updateActive = (content: string) => {
     if (!active) return;
