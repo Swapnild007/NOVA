@@ -56,10 +56,10 @@ export async function POST(request: Request) {
       plan.contextMessages
     );
 
-    const upstream = await fetch(\`\${OPENROUTER_URL}/chat/completions\`, {
+    const upstream = await fetch(`${OPENROUTER_URL}/chat/completions`, {
       method: "POST",
       headers: {
-        Authorization: \`Bearer \${apiKey}\`,
+        Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
         "HTTP-Referer": "https://nova-gamma-mocha.vercel.app",
         "X-Title": "NOVA",
@@ -135,7 +135,7 @@ export async function POST(request: Request) {
           if (usage) {
             controller.enqueue(
               encoder.encode(
-                \`\${USAGE_MARKER}\${JSON.stringify(usage)}\`
+                `${USAGE_MARKER}${JSON.stringify(usage)}`
               )
             );
           }
