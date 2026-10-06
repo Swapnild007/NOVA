@@ -6,26 +6,61 @@ import {
   type ChatModelAdapter,
 } from "@assistant-ui/react";
 
+type TextPart = { type: "text"; text: string };
+type Message = { role: "user" | "assistant" | "system"; content: TextPart[] };
+
 const adapter: ChatModelAdapter = {
-  async *run({ messages }) {
-    const latest = messages[messages.length - 1];
-    const text =
-      latest?.content
-        ?.filter((part) => part.type === "text")
-        .map((part) => part.text)
-        .join(" ")
-        .trim() || "";
+  async *run({ messages, abortSignal }) {
+    const payload = {
+      messages: messages.map((message: Message) => ({
+        role: message.role,
+        content: message.content
+          .filter((part) => part.type === "text")
+          .map((part) => part.text)
+          .join(""),
+      })),
+    };
 
-    const response = text
-      ? `I’m NOVA. I’m ready to work on “${text}”. The intelligence layer is connected to the conversation surface now. Next, we’ll connect NOVA to real models, tools, files and actions without changing this experience.`
-      : "I’m NOVA. Tell me what you want to accomplish.";
+    const response = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: abortSignal,
+    });
 
-    yield { content: [{ type: "text", text: response }] };
+    if (!response.ok || !response.body) {
+      const detail = await response.text().catch(() => "");
+      throw new Error(
+        detail || "NOVA could not reach its intelligence service."
+      );
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      const text = decoder.decode(value, { stream: true });
+      if (text) {
+        yield { content: [{ type: "text", text }] };
+      }
+    }
+
+    const tail = decoder.decode();
+    if (tail) {
+      yield { content: [{ type: "text", text: tail }] };
+    }
   },
 };
 
 export function NovaRuntime({ children }: { children: React.ReactNode }) {
   const runtime = useLocalRuntime(adapter);
 
-  return <AssistantRuntimeProvider runtime={runtime}>{children}</AssistantRuntimeProvider>;
+  return (
+    <AssistantRuntimeProvider runtime={runtime}>
+      {children}
+    </AssistantRuntimeProvider>
+  );
 }
