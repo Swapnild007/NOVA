@@ -19,7 +19,9 @@ type ProjectPayload = {
   name: string;
   summary: string;
   files: ProjectFile[];
+  verification?: { passed?: boolean; checks?: string[] };
 };
+
 
 function env(name: string) {
   return process.env[name]?.trim();
@@ -75,9 +77,7 @@ function extractJson(text: string): ProjectPayload {
 
 export async function POST(request: Request) {
   const apiKey = env("OPENROUTER_API_KEY");
-  if (!apiKey) {
-    return new Response("NOVA's build connection is not configured.", { status: 503 });
-  }
+  if (!apiKey) return new Response("NOVA's build connection is not configured.", { status: 503 });
 
   try {
     const body = (await request.json()) as { messages?: unknown };
@@ -88,47 +88,75 @@ export async function POST(request: Request) {
     const prepared = prepareNovaMessages(messages, Math.min(plan.contextMessages, 16));
 
     const system = [
-      "You are NOVA's product builder.",
-      "Build the requested web application as a small, self-contained project that can run directly in a browser.",
-      "Return ONLY valid JSON. No markdown fences. No commentary.",
-      'Schema: {"name":"string","summary":"string","files":[{"path":"index.html","content":"string"}, {"path":"styles.css","content":"string"}, {"path":"app.js","content":"string"}]}',
-      "Always include index.html, styles.css and app.js.",
-      "Use semantic HTML, responsive CSS and real JavaScript interactions.",
-      "Do not use external images, external scripts, external CSS frameworks, tracking, or remote dependencies unless the user explicitly requests them.",
-      "Make the result polished and production-minded, not a toy placeholder.",
-      "Keep the generated project reasonably small. Prefer a complete working experience over many files.",
-      "The index.html must reference ./styles.css and ./app.js.",
+      "You are NOVA's autonomous product builder.",
+      "You have a real isolated Linux workspace through the shell tool.",
+      "Do not merely describe code. Build the requested web application in /workspace.",
+      "Create index.html, styles.css and app.js. Add other files only when genuinely needed.",
+      "Run real validation after writing files. At minimum verify the files exist, HTML has a body, CSS is non-empty, and JavaScript parses with Node.",
+      "If validation fails, inspect the error, edit the files, and run validation again.",
+      "Never claim a test passed unless you actually ran it.",
+      "Keep the project self-contained and browser-runnable unless the user explicitly requests a framework or dependency.",
+      "Do not use external images, scripts, CSS frameworks, tracking, or remote dependencies unless explicitly requested.",
+      "Make the result polished, responsive, accessible, and interactive.",
+      "When finished, read the final files and return ONLY valid JSON.",
+      'Final JSON schema: {"name":"string","summary":"string","files":[{"path":"index.html","content":"string"},{"path":"styles.css","content":"string"},{"path":"app.js","content":"string"}],"verification":{"passed":true,"checks":["string"]}}',
+      "Include the exact final contents of every returned file."
     ].join("\n");
 
-    const upstream = await fetch(OPENROUTER_URL + "/chat/completions", {
+    const upstream = await fetch(OPENROUTER_URL + "/responses", {
       method: "POST",
       headers: {
         Authorization: "Bearer " + apiKey,
         "Content-Type": "application/json",
         "HTTP-Referer": "https://nova-gamma-mocha.vercel.app",
-        "X-Title": "NOVA Project Builder",
+        "X-Title": "NOVA Autonomous Project Builder"
       },
       body: JSON.stringify({
         model: plan.model,
-        messages: [{ role: "system", content: system }, ...prepared],
-        stream: false,
-        temperature: 0.2,
-        response_format: { type: "json_object" },
+        input: [
+          { role: "system", content: [{ type: "input_text", text: system }] },
+          {
+            role: "user",
+            content: [{
+              type: "input_text",
+              text: prepared.map((message) => message.role.toUpperCase() + ": " + message.content).join("\n\n")
+            }]
+          }
+        ],
+        tools: [{
+          type: "openrouter:shell",
+          parameters: {
+            engine: "openrouter",
+            timeout_ms: 120000,
+            max_output_length: 24000
+          }
+        }],
         ...(plan.fallbackModels.length ? { models: plan.fallbackModels } : {}),
+        max_output_tokens: 24000
       }),
-      cache: "no-store",
+      cache: "no-store"
     });
 
     if (!upstream.ok) {
-      console.error("NOVA builder upstream error", await upstream.text().catch(() => ""));
-      return new Response("NOVA could not build the project right now.", { status: 502 });
+      console.error("NOVA autonomous builder upstream error", await upstream.text().catch(() => ""));
+      return new Response("NOVA could not start the build workspace right now.", { status: 502 });
     }
 
     const json = await upstream.json();
-    const text = json?.choices?.[0]?.message?.content;
-    if (typeof text !== "string") {
-      return new Response("NOVA received an empty build result.", { status: 502 });
+    const output = Array.isArray(json?.output) ? json.output : [];
+    const textParts: string[] = [];
+
+    for (const item of output) {
+      if (typeof item?.text === "string") textParts.push(item.text);
+      if (Array.isArray(item?.content)) {
+        for (const part of item.content) {
+          if (typeof part?.text === "string") textParts.push(part.text);
+        }
+      }
     }
+
+    const text = textParts.join("\n").trim();
+    if (!text) return new Response("NOVA received an empty build result.", { status: 502 });
 
     const project = extractJson(text);
     const payload = "__NOVA_PROJECT__" + JSON.stringify(project);
@@ -138,10 +166,11 @@ export async function POST(request: Request) {
         "Content-Type": "text/plain; charset=utf-8",
         "Cache-Control": "no-store",
         "X-NOVA-Intent": "build",
-      },
+        "X-NOVA-Verified": project.verification?.passed ? "true" : "false"
+      }
     });
   } catch (error) {
-    console.error("NOVA builder error", error);
-    return new Response("NOVA's project builder could not complete this build.", { status: 503 });
+    console.error("NOVA autonomous builder error", error);
+    return new Response("NOVA's autonomous builder could not complete this build.", { status: 503 });
   }
 }
