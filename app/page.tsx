@@ -562,26 +562,25 @@ function Home() {
 
                     {composerMenuOpen && (
                       <div className="composer-menu" role="menu">
-                        <button type="button" role="menuitem" onClick={() => setComposerMenuOpen(false)}>
+                        <button type="button" role="menuitem" onClick={() => { aui.composer.setText("Add photos or files to this conversation."); setComposerMenuOpen(false); }}>
                           <span className="composer-menu-icon">＋</span>
-                          <span>
-                            <strong>Add photos & files</strong>
-                            <small>Attach something to this conversation</small>
-                          </span>
+                          <span><strong>Add photos & files</strong></span>
                         </button>
-                        <button type="button" role="menuitem" onClick={() => setComposerMenuOpen(false)}>
-                          <span className="composer-menu-icon">⌕</span>
-                          <span>
-                            <strong>Search the web</strong>
-                            <small>Find current information online</small>
-                          </span>
-                        </button>
-                        <button type="button" role="menuitem" onClick={() => setComposerMenuOpen(false)}>
+                        <button type="button" role="menuitem" onClick={() => { aui.composer.setText("Create an image for me."); setComposerMenuOpen(false); }}>
                           <span className="composer-menu-icon">✦</span>
-                          <span>
-                            <strong>Create image</strong>
-                            <small>Turn an idea into an image</small>
-                          </span>
+                          <span><strong>Create image</strong></span>
+                        </button>
+                        <button type="button" role="menuitem" onClick={() => { aui.composer.setText("Do deep research on this."); setComposerMenuOpen(false); }}>
+                          <span className="composer-menu-icon">◎</span>
+                          <span><strong>Deep research</strong></span>
+                        </button>
+                        <button type="button" role="menuitem" onClick={() => { aui.composer.setText("Search the web for this."); setComposerMenuOpen(false); }}>
+                          <span className="composer-menu-icon">⌕</span>
+                          <span><strong>Web search</strong></span>
+                        </button>
+                        <button type="button" role="menuitem" onClick={() => setComposerMenuOpen(false)}>
+                          <span className="composer-menu-icon">•••</span>
+                          <span><strong>More</strong></span>
                         </button>
                       </div>
                     )}
