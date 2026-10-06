@@ -132,7 +132,7 @@ export async function POST(request: Request) {
     if (!upstream.ok || !upstream.body) {
       const detail = await upstream.text().catch(() => "");
       console.error("NOVA provider error", {
-        provider: attempt.provider,
+        provider: attempt.label,
         model: attempt.model,
         status: upstream.status,
         intent: plan.intent,
