@@ -1,12 +1,24 @@
 # NOVA
 
-Clean-start personal intelligence experience.
+NOVA is being built as an intelligence workspace rather than a conventional chatbot.
 
-## First milestone
-Original splash experience with a restrained luxury visual language, distinctive assistant presence, motion, responsive behavior, reduced-motion support, and deterministic exit.
+## Foundation
 
-Inspired by established AI-assistant UX principles. Implementation is original.
+- Next.js
+- React
+- assistant-ui runtime and primitives
+- GitHub as source control
+- GitHub Pages static export for the first public shell
+
+The interface is deliberately separated from the model layer so real model providers, tools, files, memory and actions can be connected without rebuilding the product experience.
 
 ## Development
+
+```bash
 npm install
 npm run dev
+```
+
+## Direction
+
+NOVA should feel like one intelligence with many capabilities. Internal routing, agents and providers remain implementation details and are not exposed as the primary user experience.
