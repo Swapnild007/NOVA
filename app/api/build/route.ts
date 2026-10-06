@@ -4,6 +4,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1";
+const BUILD_TIMEOUT_MS = 150_000;
+const MAX_BUILDER_TOOL_STEPS = 8;
 
 type IncomingMessage = {
   role: "user" | "assistant" | "system";
@@ -159,6 +161,7 @@ export async function POST(request: Request) {
         "HTTP-Referer": "https://nova-gamma-mocha.vercel.app",
         "X-Title": "NOVA Autonomous Project Builder"
       },
+      signal: AbortSignal.timeout(BUILD_TIMEOUT_MS),
       body: JSON.stringify({
         model: plan.model,
         input: [
@@ -185,7 +188,9 @@ export async function POST(request: Request) {
           }
         }],
         ...(plan.fallbackModels.length ? { models: plan.fallbackModels } : {}),
-        max_output_tokens: 24000
+        max_output_tokens: 20000,
+        max_tool_calls: MAX_BUILDER_TOOL_STEPS,
+        stop_server_tools_when: [{ type: "step_count_is", step_count: MAX_BUILDER_TOOL_STEPS }]
       }),
       cache: "no-store"
     });
