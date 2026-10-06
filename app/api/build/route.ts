@@ -109,7 +109,7 @@ export async function POST(request: Request) {
               ? (body.project as ExistingProject).name.slice(0, 80)
               : "NOVA Project",
             summary: typeof (body.project as ExistingProject).summary === "string"
-              ? (body.project as ExistingProject).summary.slice(0, 500)
+              ? ((body.project as ExistingProject).summary || "").slice(0, 500)
               : "",
             files: (body.project as ExistingProject).files
               .filter(
