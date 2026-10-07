@@ -12,6 +12,7 @@ import {
   useAuiState,
 } from "@assistant-ui/react";
 import { NovaRuntime } from "./nova-runtime";
+import { NovaMarkdown } from "./nova-markdown";
 
 type Theme = "system" | "light" | "dark";
 type SettingsSection =
@@ -101,14 +102,13 @@ function buildPreview(files: NovaProjectFile[]) {
   const css = files.find((file) => file.path === "styles.css")?.content || "";
   const js = files.find((file) => file.path === "app.js")?.content || "";
 
-  // Keep the preview renderer deliberately simple and parser-safe.
-  // The generated project is self-contained inside the iframe.
-  const withCss = index.replace(
-    /styles\\.css/g,
-    "data:text/css,"
-  );
+  // Keep the preview renderer self-contained so generated workspaces do not
+  // depend on relative asset URLs inside the sandboxed iframe.
+  const withoutExternalAssets = index
+    .replace(/<link[^>]*href=["']styles\\.css["'][^>]*>/gi, "")
+    .replace(/<script[^>]*src=["']app\\.js["'][^>]*><\\/script>/gi, "");
 
-  return withCss
+  return withoutExternalAssets
     .replace("</head>", "<style>\\n" + css + "\\n</style>\\n</head>")
     .replace("</body>", "<script>\\n" + js + "\\n</script>\\n</body>");
 }
@@ -277,7 +277,7 @@ function Message() {
         )}
       </div>
       <div className="message-text">
-        {text}
+        {message.role === "assistant" ? <NovaMarkdown>{text}</NovaMarkdown> : text}
       </div>
       <ErrorPrimitive.Root className="message-error">
         <ErrorPrimitive.Message />

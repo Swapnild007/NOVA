@@ -24,6 +24,7 @@
 
 @media (prefers-color-scheme: dark) {
   :root[data-theme="system"] {
+
     --bg: #0c0d0f;
     --surface: rgba(28,30,35,.78);
     --surface-strong: rgba(24,26,31,.94);
@@ -33,6 +34,16 @@
     --line: rgba(255,255,255,.10);
     --shadow: 0 24px 80px rgba(0,0,0,.34);
     --danger: #ff7b72;
+  }
+  :root[data-theme="system"] .nova-shell {
+    background:
+      radial-gradient(circle at 50% -10%, rgba(70,74,84,.20), transparent 40%),
+      radial-gradient(circle at 100% 65%, rgba(45,50,65,.20), transparent 34%),
+      linear-gradient(145deg, #111318 0%, #0b0c0e 100%);
+  }
+
+  :root[data-theme="system"] .nova-shell::before {
+    background-image: radial-gradient(rgba(255,255,255,.045) .65px, transparent .65px);
   }
 }
 
@@ -47,7 +58,7 @@ html, body {
   -webkit-font-smoothing: antialiased;
 }
 
-body { min-height: 100svh; }
+body { min-height: 100svh; min-height: 100dvh; }
 button, textarea, input, select { font: inherit; }
 .nova-file-input { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 button { border: 0; }
@@ -61,10 +72,10 @@ button { border: 0; }
     linear-gradient(145deg, #f8f9fb 0%, #eef0f4 100%);
   color: var(--ink);
   overflow: hidden;
+  isolation: isolate;
 }
 
-:root[data-theme="dark"] .nova-shell,
-:root[data-theme="system"] .nova-shell {
+:root[data-theme="dark"] .nova-shell {
   background:
     radial-gradient(circle at 50% -10%, rgba(70,74,84,.20), transparent 40%),
     radial-gradient(circle at 100% 65%, rgba(45,50,65,.20), transparent 34%),
@@ -81,8 +92,7 @@ button { border: 0; }
   opacity: .20;
 }
 
-:root[data-theme="dark"] .nova-shell::before,
-:root[data-theme="system"] .nova-shell::before {
+:root[data-theme="dark"] .nova-shell::before {
   background-image: radial-gradient(rgba(255,255,255,.045) .65px, transparent .65px);
 }
 
@@ -93,13 +103,17 @@ button { border: 0; }
   display: grid;
   place-items: center;
   background: var(--bg);
-  transition: opacity .65s cubic-bezier(.2,.7,.2,1), transform .65s cubic-bezier(.2,.7,.2,1);
+  visibility: visible;
+  will-change: opacity, transform;
+  transition: opacity .45s cubic-bezier(.2,.7,.2,1), transform .45s cubic-bezier(.2,.7,.2,1), visibility 0s linear 0s;
 }
 
 .nova-intro.is-hidden {
   opacity: 0;
   pointer-events: none;
   transform: scale(1.015);
+  visibility: hidden;
+  transition-delay: 0s, 0s, .45s;
 }
 
 .intro-mark {
@@ -204,6 +218,7 @@ button { border: 0; }
   z-index: 1;
   width: min(980px,calc(100% - 32px));
   height: calc(100svh - 76px);
+  height: calc(100dvh - 76px);
   margin: 0 auto;
   display: flex;
   flex-direction: column;
@@ -315,6 +330,7 @@ h1 {
   font-size: 15px;
   line-height: 1.6;
   overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 
 @keyframes messageIn {
@@ -929,7 +945,8 @@ h1 {
   .workspace {
     width: min(100% - 22px,720px);
     height: calc(100svh - 66px);
-    padding: 18px 0 56px;
+    height: calc(100dvh - 66px);
+    padding: 18px 0 max(56px, calc(42px + env(safe-area-inset-bottom)));
   }
   .hero-copy { margin-bottom: 18px; }
   .hero-copy p { font-size: 14px; }
@@ -981,7 +998,7 @@ h1 {
     position: fixed;
     left: 12px;
     right: 12px;
-    bottom: 78px;
+    bottom: calc(78px + env(safe-area-inset-bottom));
     width: auto;
     border-radius: 20px;
     padding: 8px;
