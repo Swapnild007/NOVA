@@ -480,8 +480,8 @@ function SettingsModal({
                 <UsageCard label="Output tokens" value={formatNumber(usage.completionTokens)} />
                 <UsageCard label="Estimated cost" value={formatUsd(usage.cost)} />
               </div>
-              <SettingRow title="AI connection" description="NOVA currently routes through its server-side OpenRouter connection." value="">
-                <span className="status-pill success">Connected</span>
+              <SettingRow title="AI connection" description="NOVA routes through its server-side direct-provider router." value="">
+                <span className="status-pill">Server-side router</span>
               </SettingRow>
               <SettingRow title="API key" description="Secret stays on the server. NOVA never exposes the key to the browser." value="">
                 <span className="status-pill">Server-side</span>
@@ -492,8 +492,8 @@ function SettingsModal({
 
           {section === "Connections" && (
             <div className="settings-stack">
-              <SettingRow title="OpenRouter" description="Unified model gateway currently connected to NOVA." value="">
-                <span className="status-pill success">Connected</span>
+              <SettingRow title="Direct AI providers" description="NOVA can route directly to configured free providers without an aggregator." value="">
+                <span className="status-pill">Configurable</span>
               </SettingRow>
               <SettingRow title="More providers" description="The architecture is ready for additional model providers without changing the chat surface." value="">
                 <span className="status-pill">Planned</span>

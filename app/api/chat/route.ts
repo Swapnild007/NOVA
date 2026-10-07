@@ -6,14 +6,14 @@ function textOf(content:any){return typeof content==="string"?content:Array.isAr
 const MARK="__NOVA_USAGE__";
 function detail(raw:string){const c=raw.replace(/(?:sk-|ci_live_)[A-Za-z0-9_-]+/g,"[redacted-key]");try{const j=JSON.parse(c);return String(j?.error?.message||j?.message||j?.error||c).slice(0,500)}catch{return c.replace(/\s+/g," ").slice(0,500)}}
 function sanitize(x:unknown):Msg[]{if(!Array.isArray(x))return[];return x.filter((m):m is Msg=>!!m&&typeof m==="object"&&(typeof(m as Msg).content==="string"||Array.isArray((m as Msg).content))&&["user","assistant","system"].includes((m as Msg).role)).slice(-40)}
-function failure(s:number,d:string){const k=s===401?"authentication was rejected":s===402?"wallet balance or budget is insufficient":s===403?"the request was forbidden":s===404?"the model is unavailable":s===429?"the gateway rate-limited the request":s>=500?"the gateway returned a server error":"the gateway rejected the request";return"NOVA intelligence connection failed: "+k+"."+(d?" Detail: "+detail(d):"")}
+function failure(s:number,d:string,label:string){const k=s===401?"authentication was rejected":s===402?"wallet balance or budget is insufficient":s===403?"the request was forbidden":s===404?"the model is unavailable":s===429?"the provider rate-limited the request":s>=500?"the provider returned a server error":"the provider rejected the request";return"NOVA intelligence connection failed at "+label+": "+k+"."+(d?" Detail: "+detail(d):"")}
 export async function POST(req:Request){
  try{
   const body=await req.json() as {messages?:unknown}, valid=sanitize(body.messages); if(!valid.length)return new Response("NOVA needs a message to begin.",{status:400});
   const plan=createNovaPlan(valid),messages=prepareNovaMessages(valid,plan.contextMessages),objective=textOf(messages.filter(m=>m.role==="user").at(-1)?.content);
   const attempt=await requestNovaIntelligence(plan,{messages:[{role:"system",content:buildNovaSystem(plan,objective)},...messages],stream:true,...(plan.useWeb?{tools:[{type:"openrouter:web_search"}],tool_choice:"auto",max_tool_calls:plan.deepResearch?6:2}: {})});
-  if(!attempt)return new Response("NOVA gateway is not configured. Set NOVA_GATEWAY_URL, NOVA_GATEWAY_API_KEY, and an exact NOVA_GATEWAY_MODEL.",{status:503});
-  if(!attempt.response.ok||!attempt.response.body){const d=await attempt.response.text().catch(()=>"");return new Response(failure(attempt.response.status,d),{status:200})}
+  if(!attempt)return new Response("NOVA has no healthy intelligence provider configured. Add at least one direct provider key (Gemini, Mistral, Groq, NVIDIA, Z.AI or Qwen) or configure NOVA_GATEWAY_* as a fallback.",{status:503});
+  if(!attempt.response.ok||!attempt.response.body){const d=await attempt.response.text().catch(()=>"");return new Response(failure(attempt.response.status,d,attempt.label),{status:200})}
   const contentType=attempt.response.headers.get("content-type")||"";
   const reader=attempt.response.body.getReader(),decoder=new TextDecoder(),encoder=new TextEncoder();
   if(!contentType.includes("text/event-stream")){
