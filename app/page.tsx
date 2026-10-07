@@ -81,6 +81,96 @@ type NovaAttachment = {
   dataUrl: string;
   size: number;
 };
+const CHAT_HISTORY_KEY = "nova-chat-history-v1";
+const ACTIVE_CHAT_KEY = "nova-active-chat-id";
+const THREAD_SWITCH_EVENT = "nova-thread-switch";
+
+type PersistedChat = {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  messages: Array<{
+    role: "user" | "assistant" | "system";
+    text: string;
+    createdAt: string;
+  }>;
+};
+
+function loadChatHistory(): PersistedChat[] {
+  try {
+    const raw = localStorage.getItem(CHAT_HISTORY_KEY);
+    const parsed = raw ? JSON.parse(raw) as PersistedChat[] : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveChatHistory(chats: PersistedChat[]) {
+  try {
+    localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(chats.slice(0, 50)));
+  } catch {
+    // History is best-effort local persistence.
+  }
+}
+
+function activeChatId() {
+  return localStorage.getItem(ACTIVE_CHAT_KEY) || "";
+}
+
+function ensureChatRecord(id: string) {
+  const chats = loadChatHistory();
+  if (chats.some((chat) => chat.id === id)) return chats;
+  const now = new Date().toISOString();
+  const next: PersistedChat = {
+    id,
+    title: "New chat",
+    createdAt: now,
+    updatedAt: now,
+    messages: [],
+  };
+  const updated = [next, ...chats];
+  saveChatHistory(updated);
+  return updated;
+}
+
+function newChatId() {
+  return "chat-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 7);
+}
+
+function messageText(message: { content: readonly { type: string; text?: string }[] }) {
+  return message.content
+    .filter((part) => part.type === "text")
+    .map((part) => part.text || "")
+    .join("");
+}
+
+function persistChatMessages(id: string, messages: readonly { role: "user" | "assistant" | "system"; content: readonly { type: string; text?: string }[]; createdAt?: Date }[]) {
+  const chats = ensureChatRecord(id);
+  const now = new Date().toISOString();
+  const persisted = messages
+    .map((message) => ({
+      role: message.role,
+      text: messageText(message).slice(0, 30000),
+      createdAt: message.createdAt instanceof Date ? message.createdAt.toISOString() : now,
+    }))
+    .filter((message) => message.text.length > 0);
+  const firstUser = persisted.find((message) => message.role === "user");
+  const updated = chats.map((chat) =>
+    chat.id === id
+      ? {
+          ...chat,
+          title: chat.title === "New chat" && firstUser ? firstUser.text.replace(/\s+/g, " ").trim().slice(0, 72) || "New chat" : chat.title,
+          updatedAt: now,
+          messages: persisted,
+        }
+      : chat
+  );
+  saveChatHistory(updated);
+  window.dispatchEvent(new Event("nova-chat-history-updated"));
+}
+
 const PROJECT_STORAGE_KEY = "nova-active-project";
 
 type NovaProjectFile = { path: string; content: string };
@@ -561,6 +651,74 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (value: boo
   );
 }
 
+function ChatHistoryPanel({
+  chats,
+  activeId,
+  search,
+  setSearch,
+  onSelect,
+  onNew,
+  onRename,
+  onDelete,
+  onClose,
+}: {
+  chats: PersistedChat[];
+  activeId: string;
+  search: string;
+  setSearch: (value: string) => void;
+  onSelect: (id: string) => void;
+  onNew: () => void;
+  onRename: (id: string) => void;
+  onDelete: (id: string) => void;
+  onClose: () => void;
+}) {
+  const filtered = chats.filter((chat) => chat.title.toLowerCase().includes(search.toLowerCase().trim()));
+
+  return (
+    <div className="history-backdrop" role="presentation" onMouseDown={(event) => {
+      if (event.currentTarget === event.target) onClose();
+    }}>
+      <aside className="history-panel" aria-label="Chat history">
+        <div className="history-header">
+          <div>
+            <span className="history-kicker">NOVA</span>
+            <h2>Chat history</h2>
+          </div>
+          <button type="button" className="settings-close" onClick={onClose} aria-label="Close chat history">×</button>
+        </div>
+
+        <button type="button" className="history-new" onClick={onNew}>＋ New chat</button>
+
+        <div className="history-search">
+          <span>⌕</span>
+          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search chats" aria-label="Search chats" />
+        </div>
+
+        <div className="history-list">
+          {filtered.length === 0 ? (
+            <div className="history-empty">No chats found.</div>
+          ) : (
+            filtered.map((chat) => (
+              <div key={chat.id} className={chat.id === activeId ? "history-item active" : "history-item"}>
+                <button type="button" className="history-item-main" onClick={() => onSelect(chat.id)}>
+                  <strong>{chat.title || "New chat"}</strong>
+                  <span>{new Date(chat.updatedAt).toLocaleDateString(undefined, { day: "numeric", month: "short" })}</span>
+                </button>
+                <div className="history-item-actions">
+                  <button type="button" onClick={() => onRename(chat.id)} aria-label={`Rename ${chat.title}`} title="Rename">✎</button>
+                  <button type="button" onClick={() => onDelete(chat.id)} aria-label={`Delete ${chat.title}`} title="Delete">×</button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        <div className="history-footer">Chats are stored locally on this device for now.</div>
+      </aside>
+    </div>
+  );
+}
+
 function Home() {
   const aui = useAui();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -573,7 +731,29 @@ function Home() {
   const [composerMenuOpen, setComposerMenuOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsSection, setSettingsSection] = useState<SettingsSection>("General");
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historySearch, setHistorySearch] = useState("");
+  const [activeChat, setActiveChat] = useState("");
+  const [chatHistory, setChatHistory] = useState<PersistedChat[]>([]);
+  const skipHistoryPersist = useRef(false);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const id = activeChatId() || newChatId();
+    const chats = ensureChatRecord(id);
+    localStorage.setItem(ACTIVE_CHAT_KEY, id);
+    setActiveChat(id);
+    setChatHistory(chats);
+  }, []);
+
+  useEffect(() => {
+    if (!activeChat || skipHistoryPersist.current) {
+      if (skipHistoryPersist.current) skipHistoryPersist.current = false;
+      return;
+    }
+    persistChatMessages(activeChat, messages);
+    setChatHistory(loadChatHistory());
+  }, [messages, activeChat]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setIntro(false), 950);
@@ -616,6 +796,61 @@ function Home() {
     document.addEventListener("mousedown", close);
     return () => document.removeEventListener("mousedown", close);
   }, [menuOpen]);
+
+  const switchChat = (id: string) => {
+    if (id === activeChat) {
+      setHistoryOpen(false);
+      return;
+    }
+    persistChatMessages(activeChat, aui.thread.getState().messages);
+    skipHistoryPersist.current = true;
+    localStorage.setItem(ACTIVE_CHAT_KEY, id);
+    setActiveChat(id);
+    setChatHistory(loadChatHistory());
+    window.dispatchEvent(new CustomEvent(THREAD_SWITCH_EVENT, { detail: { id } }));
+    setHistoryOpen(false);
+  };
+
+  const createChat = () => {
+    persistChatMessages(activeChat, aui.thread.getState().messages);
+    const id = newChatId();
+    const chats = ensureChatRecord(id);
+    skipHistoryPersist.current = true;
+    localStorage.setItem(ACTIVE_CHAT_KEY, id);
+    setActiveChat(id);
+    setChatHistory(chats);
+    window.dispatchEvent(new CustomEvent(THREAD_SWITCH_EVENT, { detail: { id } }));
+    setHistoryOpen(false);
+    setHistorySearch("");
+  };
+
+  const renameChat = (id: string) => {
+    const chat = loadChatHistory().find((item) => item.id === id);
+    if (!chat) return;
+    const title = window.prompt("Rename chat", chat.title);
+    if (!title?.trim()) return;
+    const chats = loadChatHistory().map((item) => item.id === id ? { ...item, title: title.trim().slice(0, 72), updatedAt: new Date().toISOString() } : item);
+    saveChatHistory(chats);
+    setChatHistory(chats);
+  };
+
+  const deleteChat = (id: string) => {
+    const chats = loadChatHistory();
+    if (chats.length <= 1) {
+      createChat();
+      return;
+    }
+    const remaining = chats.filter((chat) => chat.id !== id);
+    saveChatHistory(remaining);
+    if (id === activeChat) {
+      const next = remaining[0];
+      skipHistoryPersist.current = true;
+      localStorage.setItem(ACTIVE_CHAT_KEY, next.id);
+      setActiveChat(next.id);
+      window.dispatchEvent(new CustomEvent(THREAD_SWITCH_EVENT, { detail: { id: next.id } }));
+    }
+    setChatHistory(remaining);
+  };
 
   const setComposerValue = (value: string) => {
     aui.composer.setText(value);
@@ -672,14 +907,14 @@ function Home() {
       </div>
 
       <header className="topbar">
-        <button type="button" className="brand brand-button" onClick={() => aui.thread.reset()}>
+        <button type="button" className="brand brand-button" onClick={() => setHistoryOpen(true)} title="Open chat history">
           <span className="brand-mark">N</span>
           <span>NOVA</span>
         </button>
 
         <div className="topbar-actions">
           {!isEmpty && (
-            <button type="button" className="new-chat-button" onClick={() => aui.thread.reset()}>
+            <button type="button" className="new-chat-button" onClick={createChat}>
               New chat
             </button>
           )}
@@ -699,6 +934,9 @@ function Home() {
                 <button type="button" onClick={() => setComposerValue("What can you help me with?")}>What can you do?</button>
                 <button type="button" onClick={() => setComposerValue("Help me plan something.")}>Start planning</button>
                 <button type="button" onClick={() => setComposerValue("Help me solve a problem.")}>Solve a problem</button>
+                <div className="menu-divider" />
+                <button type="button" onClick={() => { setHistoryOpen(true); setMenuOpen(false); }}>Chat history</button>
+                <button type="button" onClick={createChat}>New chat</button>
                 <div className="menu-divider" />
                 <button type="button" onClick={() => { setSettingsOpen(true); setMenuOpen(false); }}>Settings</button>
               </div>
@@ -824,6 +1062,20 @@ function Home() {
         <span>One intelligence layer.</span>
         <span>Private by design.</span>
       </footer>
+
+      {historyOpen && (
+        <ChatHistoryPanel
+          chats={chatHistory}
+          activeId={activeChat}
+          search={historySearch}
+          setSearch={setHistorySearch}
+          onSelect={switchChat}
+          onNew={createChat}
+          onRename={renameChat}
+          onDelete={deleteChat}
+          onClose={() => setHistoryOpen(false)}
+        />
+      )}
 
       {settingsOpen && (
         <SettingsModal
