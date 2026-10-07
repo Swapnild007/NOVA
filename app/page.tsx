@@ -237,14 +237,14 @@ function Message() {
   };
 
   if (!text) {
-    if (message.role !== "assistant" || !isRunning) return null;
+    if (message.role !== "assistant") return null;
 
     return (
       <MessagePrimitive.Root className="message message-assistant">
         <div className="message-head">
           <div className="message-label">NOVA</div>
         </div>
-        <div className="project-building">Working on it…</div>
+        {isRunning && <div className="project-building">Working on it…</div>}
         <ErrorPrimitive.Root className="message-error">
           <ErrorPrimitive.Message />
         </ErrorPrimitive.Root>
