@@ -12,7 +12,6 @@ import {
   useAuiState,
 } from "@assistant-ui/react";
 import { NovaRuntime } from "./nova-runtime";
-import { NovaMarkdown } from "./nova-markdown";
 
 type Theme = "system" | "light" | "dark";
 type SettingsSection =
@@ -278,7 +277,7 @@ function Message() {
         )}
       </div>
       <div className="message-text">
-        {message.role === "assistant" ? <NovaMarkdown>{text}</NovaMarkdown> : text}
+        {text}
       </div>
       <ErrorPrimitive.Root className="message-error">
         <ErrorPrimitive.Message />
