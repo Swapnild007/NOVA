@@ -21,6 +21,48 @@ type ProviderConfig = {
 
 const env = (name: string) => process.env[name]?.trim();
 
+type ProviderHealth = {
+  successes: number;
+  failures: number;
+  lastFailureAt: number;
+  cooldownUntil: number;
+  latencyMs: number;
+};
+
+const health = new Map<ProviderId, ProviderHealth>();
+
+function healthFor(id: ProviderId): ProviderHealth {
+  const current = health.get(id);
+  if (current) return current;
+  const fresh = { successes: 0, failures: 0, lastFailureAt: 0, cooldownUntil: 0, latencyMs: 0 };
+  health.set(id, fresh);
+  return fresh;
+}
+
+function isCoolingDown(id: ProviderId) {
+  return healthFor(id).cooldownUntil > Date.now();
+}
+
+function recordProviderResult(id: ProviderId, ok: boolean, latencyMs: number) {
+  const state = healthFor(id);
+  if (ok) {
+    state.successes += 1;
+    state.latencyMs = state.latencyMs ? Math.round(state.latencyMs * 0.7 + latencyMs * 0.3) : latencyMs;
+    state.failures = 0;
+    state.cooldownUntil = 0;
+    return;
+  }
+  state.failures += 1;
+  state.lastFailureAt = Date.now();
+  state.cooldownUntil = Date.now() + Math.min(60000, 5000 * 2 ** Math.min(state.failures - 1, 3));
+}
+
+function providerScore(id: ProviderId) {
+  const state = healthFor(id);
+  return state.cooldownUntil > Date.now() ? Number.POSITIVE_INFINITY :
+    state.latencyMs + state.failures * 5000 - Math.min(state.successes, 5) * 100;
+}
+
 const providers: ProviderConfig[] = [
   {
     id: "gemini",
@@ -182,7 +224,15 @@ export async function requestNovaIntelligence(
   plan: NovaGatewayPlan,
   body: Record<string, unknown>,
 ): Promise<NovaIntelligenceAttempt | null> {
-  for (const id of orderForPlan(plan)) {
+  const ordered = orderForPlan(plan);
+  const directIds = ordered.filter((id) => id !== "gateway" && !isCoolingDown(id));
+  const ranked = [...directIds].sort((a, b) => {
+    const orderDelta = ordered.indexOf(a) - ordered.indexOf(b);
+    const scoreDelta = providerScore(a) - providerScore(b);
+    return scoreDelta === 0 ? orderDelta : scoreDelta;
+  });
+
+  for (const id of [...ranked, ...ordered.filter((id) => id === "gateway")]) {
     if (id === "gateway") {
       const gateway = await callGateway(plan, body);
       if (gateway?.response.ok) return gateway;
@@ -196,11 +246,15 @@ export async function requestNovaIntelligence(
     const attempt = await callDirectProvider(provider, body);
     if (!attempt) continue;
 
-    if (attempt.response.ok) return attempt;
+    if (attempt.response.ok) {
+      recordProviderResult(id, true, 0);
+      return attempt;
+    }
 
     // Free tiers are expected to hit 401/402/403/404/429 as quotas or model
     // access change. Continue to the next independent provider instead of
     // taking NOVA offline.
+    recordProviderResult(id, false, 0);
     if (attempt.response.status === 401 || attempt.response.status === 402 ||
         attempt.response.status === 403 || attempt.response.status === 404 ||
         attempt.response.status === 429 || attempt.response.status >= 500) {
