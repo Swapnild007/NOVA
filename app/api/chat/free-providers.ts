@@ -63,7 +63,7 @@ function providerScore(id: Exclude<ProviderId, "gateway" | "omniroute">, intent:
   const state = healthFor(id);
   return state.cooldownUntil > Date.now() ? Number.POSITIVE_INFINITY :
     state.latencyMs + state.failures * 5000 - Math.min(state.successes, 5) * 100 -
-    (id === "gateway" ? 0 : getNovaCapabilityScore(id, intent) * 100);
+    getNovaCapabilityScore(id, intent) * 100;
 }
 
 const providers: ProviderConfig[] = [
