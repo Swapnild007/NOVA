@@ -1,4 +1,5 @@
 import type { NovaGatewayPlan } from "./nova-gateway";
+import { getNovaCapabilityScore } from "./model-capabilities";
 
 type ProviderId = "gemini" | "mistral" | "groq" | "gateway";
 
@@ -57,10 +58,11 @@ function recordProviderResult(id: ProviderId, ok: boolean, latencyMs: number) {
   state.cooldownUntil = Date.now() + Math.min(60000, 5000 * 2 ** Math.min(state.failures - 1, 3));
 }
 
-function providerScore(id: ProviderId) {
+function providerScore(id: ProviderId, intent: NovaGatewayPlan["intent"]) {
   const state = healthFor(id);
   return state.cooldownUntil > Date.now() ? Number.POSITIVE_INFINITY :
-    state.latencyMs + state.failures * 5000 - Math.min(state.successes, 5) * 100;
+    state.latencyMs + state.failures * 5000 - Math.min(state.successes, 5) * 100 -
+    (id === "gateway" ? 0 : getNovaCapabilityScore(id, intent) * 100);
 }
 
 const providers: ProviderConfig[] = [
@@ -204,7 +206,7 @@ export async function requestNovaIntelligence(
   const directIds = ordered.filter((id) => id !== "gateway" && !isCoolingDown(id));
   const ranked = [...directIds].sort((a, b) => {
     const orderDelta = ordered.indexOf(a) - ordered.indexOf(b);
-    const scoreDelta = providerScore(a) - providerScore(b);
+    const scoreDelta = providerScore(a, plan.intent) - providerScore(b, plan.intent);
     return scoreDelta === 0 ? orderDelta : scoreDelta;
   });
 
@@ -219,6 +221,7 @@ export async function requestNovaIntelligence(
     const provider = providerConfig(id);
     if (!provider || !hasDirectProvider(provider)) continue;
 
+    const startedAt = Date.now();
     const attempt = await callDirectProvider(provider, body);
     if (!attempt) continue;
 
@@ -230,7 +233,7 @@ export async function requestNovaIntelligence(
     // Free tiers are expected to hit 401/402/403/404/429 as quotas or model
     // access change. Continue to the next independent provider instead of
     // taking NOVA offline.
-    recordProviderResult(id, false, 0);
+    recordProviderResult(id, false, Date.now() - startedAt);
     if (attempt.response.status === 401 || attempt.response.status === 402 ||
         attempt.response.status === 403 || attempt.response.status === 404 ||
         attempt.response.status === 429 || attempt.response.status >= 500) {
