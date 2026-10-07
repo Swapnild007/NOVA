@@ -135,7 +135,7 @@ const adapter: ChatModelAdapter = {
           ? [
               {
                 type: "text",
-                text: \`\${text}\n\nAttached file: \${pendingAttachment.name}\n\n\${extracted}\`,
+                text: `${text}\n\nAttached file: ${pendingAttachment.name}\n\n${extracted}\`
               },
             ]
           : text,
