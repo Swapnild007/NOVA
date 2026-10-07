@@ -214,7 +214,11 @@ export async function requestNovaIntelligence(
 }
 
 export function getConfiguredNovaProviders() {
-  return orderForPlan({ intent: "general", model: "", fallbackModels: [], useWeb: false, deepResearch: false, contextMessages: 20, shield: { risk: "low", redactedText: "", findings: [] } } as NovaGatewayPlan)
+  const ids = env("NOVA_PROVIDER_ORDER")
+    ? env("NOVA_PROVIDER_ORDER")!.split(",").map((x) => x.trim().toLowerCase()).filter(Boolean) as ProviderId[]
+    : ["gemini", "mistral", "groq", "nvidia", "zai", "qwen", "gateway"] as ProviderId[];
+
+  return ids
     .map((id) => id === "gateway" ? "NOVA Gateway" : providerConfig(id))
     .filter((provider): provider is ProviderConfig | "NOVA Gateway" =>
       provider === "NOVA Gateway" || Boolean(provider && hasDirectProvider(provider))
