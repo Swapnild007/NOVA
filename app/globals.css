@@ -1191,6 +1191,7 @@ h1 {
 }
 
 .nova-file-input {
+  display: none !important;
   position: absolute;
   width: 1px;
   height: 1px;
