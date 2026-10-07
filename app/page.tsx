@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  ActionBarPrimitive,
   AuiIf,
   ComposerPrimitive,
   ErrorPrimitive,
@@ -313,6 +314,7 @@ function saveUsage(usage: {
 function Message() {
   const message = useAuiState((state) => state.message);
   const isRunning = useAuiState((state) => state.thread.isRunning);
+  const isEditing = useAuiState((state) => state.composer.isEditing);
   const text = message.content
     .filter((part) => part.type === "text")
     .map((part) => part.text)
@@ -321,14 +323,13 @@ function Message() {
   const speak = () => {
     if (!("speechSynthesis" in window) || !text) return;
     window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text.replace(/[#*_\`]/g, ""));
+    const utterance = new SpeechSynthesisUtterance(text.replace(/[#*_]/g, "").replace(/`/g, ""));
     utterance.lang = "en-IN";
     window.speechSynthesis.speak(utterance);
   };
 
   if (!text) {
     if (message.role !== "assistant") return null;
-
     return (
       <MessagePrimitive.Root className="message message-assistant">
         <div className="message-head">
@@ -355,20 +356,42 @@ function Message() {
   }
 
   return (
-    <MessagePrimitive.Root
-      className={message.role === "user" ? "message message-user" : "message message-assistant"}
-    >
-      <div className="message-head">
-        <div className="message-label">{message.role === "user" ? "You" : "NOVA"}</div>
-        {message.role === "assistant" && (
-          <button type="button" className="message-speak" onClick={speak} aria-label="Read response aloud">
-            ◉
-          </button>
-        )}
-      </div>
-      <div className="message-text">
-        {message.role === "assistant" ? <NovaMarkdown>{text}</NovaMarkdown> : text}
-      </div>
+    <MessagePrimitive.Root className={message.role === "user" ? "message message-user" : "message message-assistant"}>
+      {isEditing ? (
+        <ComposerPrimitive.Root className="message-edit-composer">
+          <ComposerPrimitive.Input className="message-edit-input" autoFocus aria-label="Edit message" />
+          <div className="message-edit-actions">
+            <ComposerPrimitive.Cancel className="message-action-button">Cancel</ComposerPrimitive.Cancel>
+            <ComposerPrimitive.Send className="message-action-button message-action-primary">Save</ComposerPrimitive.Send>
+          </div>
+        </ComposerPrimitive.Root>
+      ) : (
+        <>
+          <div className="message-head">
+            <div className="message-label">{message.role === "user" ? "You" : "NOVA"}</div>
+            {message.role === "assistant" && (
+              <button type="button" className="message-speak" onClick={speak} aria-label="Read response aloud">
+                ◉
+              </button>
+            )}
+          </div>
+          <div className="message-text">
+            {message.role === "assistant" ? <NovaMarkdown>{text}</NovaMarkdown> : text}
+          </div>
+          <ActionBarPrimitive.Root hideWhenRunning autohide="not-last" className="message-actions">
+            <ActionBarPrimitive.Copy className="message-action-button" copiedDuration={2000}>Copy</ActionBarPrimitive.Copy>
+            {message.role === "user" ? (
+              <ActionBarPrimitive.Edit className="message-action-button">Edit</ActionBarPrimitive.Edit>
+            ) : (
+              <>
+                <ActionBarPrimitive.Reload className="message-action-button">Regenerate</ActionBarPrimitive.Reload>
+                <ActionBarPrimitive.FeedbackPositive className="message-action-button">Helpful</ActionBarPrimitive.FeedbackPositive>
+                <ActionBarPrimitive.FeedbackNegative className="message-action-button">Not helpful</ActionBarPrimitive.FeedbackNegative>
+              </>
+            )}
+          </ActionBarPrimitive.Root>
+        </>
+      )}
       <ErrorPrimitive.Root className="message-error">
         <ErrorPrimitive.Message />
       </ErrorPrimitive.Root>
