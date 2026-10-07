@@ -1,6 +1,6 @@
 import type { NovaGatewayPlan } from "./nova-gateway";
 
-type ProviderId = "gemini" | "mistral" | "groq" | "nvidia" | "zai" | "qwen" | "gateway";
+type ProviderId = "gemini" | "mistral" | "groq" | "nvidia" | "cerebras" | "zai" | "qwen" | "freellmapi" | "gateway";
 
 export type NovaIntelligenceAttempt = {
   source: "direct" | "gateway";
@@ -55,12 +55,27 @@ const providers: ProviderConfig[] = [
     defaultModel: "openai/gpt-oss-20b",
   },
   {
+    id: "cerebras",
+    label: "Cerebras",
+    keyEnv: "CEREBRAS_API_KEY",
+    modelEnv: "CEREBRAS_MODEL",
+    defaultBaseUrl: "https://api.cerebras.ai/v1",
+  },
+  {
     id: "zai",
     label: "Z.AI",
     keyEnv: "ZAI_API_KEY",
     modelEnv: "ZAI_MODEL",
     baseEnv: "ZAI_BASE_URL",
     defaultBaseUrl: "https://api.z.ai/api/paas/v4",
+  },
+  {
+    id: "freellmapi",
+    label: "FreeLLMAPI",
+    keyEnv: "FREELLMAPI_API_KEY",
+    modelEnv: "FREELLMAPI_MODEL",
+    baseEnv: "FREELLMAPI_BASE_URL",
+    defaultBaseUrl: "http://localhost:3001/v1",
   },
   {
     id: "qwen",
@@ -79,13 +94,13 @@ function orderForPlan(plan: NovaGatewayPlan) {
   }
 
   const defaults: Record<NovaGatewayPlan["intent"], ProviderId[]> = {
-    general: ["gemini", "groq", "mistral", "nvidia", "zai", "qwen", "gateway"],
-    research: ["gemini", "mistral", "qwen", "groq", "nvidia", "zai", "gateway"],
-    create: ["gemini", "mistral", "groq", "nvidia", "zai", "qwen", "gateway"],
-    analyze: ["gemini", "mistral", "groq", "nvidia", "zai", "qwen", "gateway"],
-    build: ["gemini", "groq", "mistral", "nvidia", "qwen", "zai", "gateway"],
-    plan: ["gemini", "mistral", "groq", "nvidia", "zai", "qwen", "gateway"],
-    act: ["gemini", "groq", "mistral", "nvidia", "zai", "qwen", "gateway"],
+    general: ["gemini", "groq", "cerebras", "mistral", "freellmapi", "nvidia", "zai", "qwen", "gateway"],
+    research: ["gemini", "cerebras", "mistral", "qwen", "freellmapi", "groq", "nvidia", "zai", "gateway"],
+    create: ["gemini", "mistral", "groq", "cerebras", "nvidia", "zai", "qwen", "freellmapi", "gateway"],
+    analyze: ["gemini", "mistral", "cerebras", "groq", "nvidia", "zai", "qwen", "freellmapi", "gateway"],
+    build: ["gemini", "groq", "cerebras", "mistral", "nvidia", "qwen", "zai", "freellmapi", "gateway"],
+    plan: ["gemini", "mistral", "cerebras", "groq", "nvidia", "zai", "qwen", "freellmapi", "gateway"],
+    act: ["gemini", "groq", "cerebras", "mistral", "nvidia", "zai", "qwen", "freellmapi", "gateway"],
   };
   return defaults[plan.intent];
 }
@@ -216,7 +231,7 @@ export async function requestNovaIntelligence(
 export function getConfiguredNovaProviders() {
   const ids = env("NOVA_PROVIDER_ORDER")
     ? env("NOVA_PROVIDER_ORDER")!.split(",").map((x) => x.trim().toLowerCase()).filter(Boolean) as ProviderId[]
-    : ["gemini", "mistral", "groq", "nvidia", "zai", "qwen", "gateway"] as ProviderId[];
+    : ["gemini", "mistral", "groq", "cerebras", "nvidia", "zai", "qwen", "freellmapi", "gateway"] as ProviderId[];
 
   return ids
     .map((id) => id === "gateway" ? "NOVA Gateway" : providerConfig(id))
