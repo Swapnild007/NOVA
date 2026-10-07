@@ -152,9 +152,10 @@ async function callDirectProvider(
         ...directBody(body),
         model,
         stream: true,
+        ...(provider.id === "gemini" ? { reasoning_effort: "low" } : {}),
       }),
       cache: "no-store",
-      signal: AbortSignal.timeout(Number(env("NOVA_PROVIDER_TIMEOUT_MS") || 45000)),
+      signal: AbortSignal.timeout(Number(env("NOVA_PROVIDER_TIMEOUT_MS") || 50000)),
     });
 
     return {
