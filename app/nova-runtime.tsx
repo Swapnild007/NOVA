@@ -150,7 +150,10 @@ const adapter: ChatModelAdapter = {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ messages: outgoingMessages }),
       signal: abortSignal,
-    });
+    }).catch((error) => new Response(
+      `NOVA could not reach its intelligence service. ${error instanceof Error ? error.message : "Network request failed."}`,
+      { status: 599 },
+    ));
 
     if (!response.ok || !response.body) {
       const detail = await response.text().catch(() => "");
