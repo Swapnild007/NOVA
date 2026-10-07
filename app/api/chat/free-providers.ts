@@ -126,6 +126,11 @@ function directBody(body: Record<string, unknown>) {
   return copy;
 }
 
+function transportFailure(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return new Response(message.slice(0, 500), { status: 599 });
+}
+
 async function callDirectProvider(
   provider: ProviderConfig,
   body: Record<string, unknown>,
@@ -158,8 +163,13 @@ async function callDirectProvider(
       model,
       response,
     };
-  } catch {
-    return null;
+  } catch (error) {
+    return {
+      source: "direct",
+      label: provider.label,
+      model,
+      response: transportFailure(error),
+    };
   }
 }
 
@@ -193,8 +203,13 @@ async function callGateway(plan: NovaGatewayPlan, body: Record<string, unknown>)
       model,
       response,
     };
-  } catch {
-    return null;
+  } catch (error) {
+    return {
+      source: "gateway" as const,
+      label: "NOVA Gateway",
+      model,
+      response: transportFailure(error),
+    };
   }
 }
 
@@ -203,7 +218,11 @@ export async function requestNovaIntelligence(
   body: Record<string, unknown>,
 ): Promise<NovaIntelligenceAttempt | null> {
   const ordered = orderForPlan(plan);
-  const directIds = ordered.filter((id) => id !== "gateway" && !isCoolingDown(id));
+
+  // Never hide a configured provider behind a cooldown. Cooldowns affect
+  // ranking, but a configured provider remains an eligible last-resort
+  // attempt when no healthy alternative exists.
+  const directIds = ordered.filter((id) => id !== "gateway");
   const ranked = [...directIds].sort((a, b) => {
     const orderDelta = ordered.indexOf(a) - ordered.indexOf(b);
     const scoreDelta = providerScore(a, plan.intent) - providerScore(b, plan.intent);
@@ -229,7 +248,7 @@ export async function requestNovaIntelligence(
     if (!attempt) continue;
 
     if (attempt.response.ok) {
-      recordProviderResult(id, true, 0);
+      recordProviderResult(id, true, Date.now() - startedAt);
       return attempt;
     }
 
