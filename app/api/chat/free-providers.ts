@@ -18,6 +18,7 @@ type ProviderConfig = {
   baseEnv?: string;
   defaultBaseUrl: string;
   defaultModel?: string;
+  fallbackModels?: string[];
 };
 
 const env = (name: string) => process.env[name]?.trim();
@@ -73,6 +74,7 @@ const providers: ProviderConfig[] = [
     modelEnv: "GEMINI_MODEL",
     defaultBaseUrl: "https://generativelanguage.googleapis.com/v1beta/openai/",
     defaultModel: "gemini-3.8-flash",
+    fallbackModels: ["gemini-3.5-flash-lite"],
   },
   {
     id: "mistral",
@@ -140,38 +142,58 @@ async function callDirectProvider(
   if (!key || !model) return null;
 
   const baseUrl = (env(provider.baseEnv || "") || provider.defaultBaseUrl).replace(/\/+$/, "");
-  try {
-    const response = await fetch(baseUrl + "/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: "Bearer " + key,
-        "Content-Type": "application/json",
-        Accept: "text/event-stream",
-      },
-      body: JSON.stringify({
-        ...directBody(body),
-        model,
-        stream: true,
-        ...(provider.id === "gemini" ? { reasoning_effort: "low" } : {}),
-      }),
-      cache: "no-store",
-      signal: AbortSignal.timeout(Number(env("NOVA_PROVIDER_TIMEOUT_MS") || 50000)),
-    });
+  const models = [model, ...(provider.fallbackModels || [])].filter((value, index, list) => list.indexOf(value) === index);
+  let lastResponse: Response | null = null;
+  let lastModel = model;
 
-    return {
-      source: "direct",
-      label: provider.label,
-      model,
-      response,
-    };
-  } catch (error) {
-    return {
-      source: "direct",
-      label: provider.label,
-      model,
-      response: transportFailure(error),
-    };
+  for (const candidate of models) {
+    lastModel = candidate;
+    for (let retry = 0; retry < 2; retry += 1) {
+      try {
+        const response = await fetch(baseUrl + "/chat/completions", {
+          method: "POST",
+          headers: {
+            Authorization: "Bearer " + key,
+            "Content-Type": "application/json",
+            Accept: "text/event-stream",
+          },
+          body: JSON.stringify({
+            ...directBody(body),
+            model: candidate,
+            stream: true,
+            ...(provider.id === "gemini" ? { reasoning_effort: "low" } : {}),
+          }),
+          cache: "no-store",
+          signal: AbortSignal.timeout(Number(env("NOVA_PROVIDER_TIMEOUT_MS") || 50000)),
+        });
+
+        if (response.ok) {
+          return { source: "direct", label: provider.label, model: candidate, response };
+        }
+
+        lastResponse = response;
+        if (response.status !== 503) break;
+        await new Promise((resolve) => setTimeout(resolve, retry === 0 ? 1200 : 2400));
+      } catch (error) {
+        if (retry === 1) {
+          return {
+            source: "direct",
+            label: provider.label,
+            model: lastModel,
+            response: transportFailure(error),
+          };
+        }
+        await new Promise((resolve) => setTimeout(resolve, 1200));
+      }
+    }
   }
+
+  return {
+    source: "direct",
+    label: provider.label,
+    model: lastModel,
+    response: lastResponse || new Response("Provider request failed.", { status: 503 }),
+  };
 }
 
 async function callGateway(plan: NovaGatewayPlan, body: Record<string, unknown>) {
