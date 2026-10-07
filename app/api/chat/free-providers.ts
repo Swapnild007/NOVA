@@ -210,7 +210,7 @@ async function callOmniRoute(plan: NovaGatewayPlan, body: Record<string, unknown
         "Content-Type": "application/json",
         Accept: "text/event-stream",
       },
-      body: JSON.stringify({ ...body, model }),
+      body: JSON.stringify({ ...directBody(body), model }),
       cache: "no-store",
       signal: AbortSignal.timeout(Number(env("NOVA_OMNIROUTE_TIMEOUT_MS") || 45000)),
     });
@@ -323,12 +323,17 @@ export function getConfiguredNovaProviders() {
     : ["gemini", "mistral", "groq", "gateway", "omniroute"] as ProviderId[];
 
   return ids
-    .map((id) => id === "gateway" ? "NOVA Gateway" : id === "omniroute" ? "OmniRoute" : providerConfig(id))
+    .map((id) => {
+      if (id === "gateway") return "NOVA Gateway";
+      if (id === "omniroute") {
+        return env("NOVA_OMNIROUTE_URL") && env("NOVA_OMNIROUTE_MODEL") ? "OmniRoute" : null;
+      }
+      return providerConfig(id);
+    })
     .filter((provider): provider is ProviderConfig | "NOVA Gateway" | "OmniRoute" =>
       provider === "NOVA Gateway" || provider === "OmniRoute" || Boolean(provider && hasDirectProvider(provider))
     )
     .map((provider) => typeof provider === "string" ? provider : provider.label);
-}
 
 
 export type NovaProviderCapability = {
