@@ -157,12 +157,19 @@ const adapter: ChatModelAdapter = {
 
     if (!response.ok || !response.body) {
       const detail = await response.text().catch(() => "");
-      throw new Error(detail || "NOVA could not reach its intelligence service.");
+      yield {
+        content: [{
+          type: "text",
+          text: detail || "NOVA could not reach its intelligence service.",
+        }],
+      };
+      return;
     }
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let fullText = "";
+    let emittedLength = 0;
 
     while (true) {
       const { done, value } = await reader.read();
@@ -172,7 +179,7 @@ const adapter: ChatModelAdapter = {
 
       const markerIndex = fullText.indexOf(USAGE_MARKER);
       if (markerIndex >= 0) {
-        const visibleText = fullText.slice(0, markerIndex);
+        const visibleText = fullText.slice(emittedLength, markerIndex);
         const usageText = fullText.slice(markerIndex + USAGE_MARKER.length).trim();
         try {
           recordUsage(JSON.parse(usageText) as UsagePayload);
@@ -185,8 +192,10 @@ const adapter: ChatModelAdapter = {
         return;
       }
 
-      if (fullText) {
-        yield { content: [{ type: "text", text: fullText }] };
+      const visibleText = fullText.slice(emittedLength);
+      if (visibleText) {
+        emittedLength = fullText.length;
+        yield { content: [{ type: "text", text: visibleText }] };
       }
     }
 
@@ -194,7 +203,7 @@ const adapter: ChatModelAdapter = {
 
     const markerIndex = fullText.indexOf(USAGE_MARKER);
     if (markerIndex >= 0) {
-      const visibleText = fullText.slice(0, markerIndex);
+      const visibleText = fullText.slice(emittedLength, markerIndex);
       const usageText = fullText.slice(markerIndex + USAGE_MARKER.length).trim();
       try {
         recordUsage(JSON.parse(usageText) as UsagePayload);
@@ -204,8 +213,11 @@ const adapter: ChatModelAdapter = {
       if (visibleText) {
         yield { content: [{ type: "text", text: visibleText }] };
       }
-    } else if (fullText) {
-      yield { content: [{ type: "text", text: fullText }] };
+    } else {
+      const visibleText = fullText.slice(emittedLength);
+      if (visibleText) {
+        yield { content: [{ type: "text", text: visibleText }] };
+      }
     }
   },
 };
