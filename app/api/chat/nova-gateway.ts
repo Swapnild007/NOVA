@@ -26,7 +26,7 @@ export function classifyNovaIntent(m:Msg[]):NovaIntent{
 }
 export function createNovaPlan(m:Msg[]):NovaGatewayPlan{
  const t=latest(m),intent=classifyNovaIntent(m),deepResearch=DEEP.test(t);
- const model=env("NOVA_GATEWAY_MODEL_"+intent.toUpperCase())||env("NOVA_GATEWAY_MODEL")||"";
+ const model=env("NOVA_GATEWAY_MODEL_"+intent.toUpperCase())||env("NOVA_GATEWAY_MODEL")||(env("OPENROUTER_API_KEY")?"openrouter/free":"");
  return {intent,model,fallbackModels:list("NOVA_GATEWAY_FALLBACK_MODELS").filter(x=>x!==model),
  useWeb:deepResearch||intent==="research"||WEB.test(t),deepResearch,contextMessages:deepResearch?32:20,shield:assessNovaInput(t)};
 }
