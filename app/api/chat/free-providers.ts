@@ -114,7 +114,7 @@ async function callDirectProvider(
   const model = env(provider.modelEnv) || provider.defaultModel;
   if (!key || !model) return null;
 
-  const baseUrl = (env(provider.baseEnv || "") || provider.defaultBaseUrl).replace(/\\/+$/, "");
+  const baseUrl = (env(provider.baseEnv || "") || provider.defaultBaseUrl).replace(/\/+$/, "");
   try {
     const response = await fetch(baseUrl + "/chat/completions", {
       method: "POST",
