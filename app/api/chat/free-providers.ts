@@ -1,6 +1,6 @@
 import type { NovaGatewayPlan } from "./nova-gateway";
 
-type ProviderId = "gemini" | "mistral" | "groq" | "nvidia" | "zai" | "qwen" | "gateway";
+type ProviderId = "gemini" | "mistral" | "groq" | "gateway";
 
 export type NovaIntelligenceAttempt = {
   source: "direct" | "gateway";
@@ -87,31 +87,7 @@ const providers: ProviderConfig[] = [
     modelEnv: "GROQ_MODEL",
     defaultBaseUrl: "https://api.groq.com/openai/v1",
     defaultModel: "openai/gpt-oss-120b",
-  },
-  {
-    id: "nvidia",
-    label: "NVIDIA NIM",
-    keyEnv: "NVIDIA_API_KEY",
-    modelEnv: "NVIDIA_MODEL",
-    defaultBaseUrl: "https://integrate.api.nvidia.com/v1",
-    defaultModel: "openai/gpt-oss-20b",
-  },
-  {
-    id: "zai",
-    label: "Z.AI",
-    keyEnv: "ZAI_API_KEY",
-    modelEnv: "ZAI_MODEL",
-    baseEnv: "ZAI_BASE_URL",
-    defaultBaseUrl: "https://api.z.ai/api/paas/v4",
-  },
-  {
-    id: "qwen",
-    label: "Alibaba Qwen",
-    keyEnv: "DASHSCOPE_API_KEY",
-    modelEnv: "DASHSCOPE_MODEL",
-    baseEnv: "DASHSCOPE_BASE_URL",
-    defaultBaseUrl: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
-  },
+  }
 ];
 
 function orderForPlan(plan: NovaGatewayPlan) {
@@ -121,13 +97,13 @@ function orderForPlan(plan: NovaGatewayPlan) {
   }
 
   const defaults: Record<NovaGatewayPlan["intent"], ProviderId[]> = {
-    general: ["gemini", "groq", "mistral", "nvidia", "zai", "qwen", "gateway"],
-    research: ["gemini", "mistral", "qwen", "groq", "nvidia", "zai", "gateway"],
-    create: ["gemini", "mistral", "groq", "nvidia", "zai", "qwen", "gateway"],
-    analyze: ["gemini", "mistral", "groq", "nvidia", "zai", "qwen", "gateway"],
-    build: ["gemini", "groq", "mistral", "nvidia", "qwen", "zai", "gateway"],
-    plan: ["gemini", "mistral", "groq", "nvidia", "zai", "qwen", "gateway"],
-    act: ["gemini", "groq", "mistral", "nvidia", "zai", "qwen", "gateway"],
+    general: ["gemini", "groq", "mistral", "gateway"],
+    research: ["gemini", "mistral", "groq", "gateway"],
+    create: ["gemini", "mistral", "groq", "gateway"],
+    analyze: ["gemini", "mistral", "groq", "gateway"],
+    build: ["gemini", "groq", "mistral", "gateway"],
+    plan: ["gemini", "mistral", "groq", "gateway"],
+    act: ["gemini", "groq", "mistral", "gateway"],
   };
   return defaults[plan.intent];
 }
@@ -270,7 +246,7 @@ export async function requestNovaIntelligence(
 export function getConfiguredNovaProviders() {
   const ids = env("NOVA_PROVIDER_ORDER")
     ? env("NOVA_PROVIDER_ORDER")!.split(",").map((x) => x.trim().toLowerCase()).filter(Boolean) as ProviderId[]
-    : ["gemini", "mistral", "groq", "nvidia", "zai", "qwen", "gateway"] as ProviderId[];
+    : ["gemini", "mistral", "groq", "gateway"] as ProviderId[];
 
   return ids
     .map((id) => id === "gateway" ? "NOVA Gateway" : providerConfig(id))
