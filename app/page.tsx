@@ -105,12 +105,12 @@ function buildPreview(files: NovaProjectFile[]) {
   // Keep the preview renderer self-contained so generated workspaces do not
   // depend on relative asset URLs inside the sandboxed iframe.
   const withoutExternalAssets = index
-    .replace(/<link[^>]*href=["']styles\\.css["'][^>]*>/gi, "")
-    .replace(/<script[^>]*src=["']app\\.js["'][^>]*><\\/script>/gi, "");
+    .replace(/<link[^>]*href=["']styles\.css["'][^>]*>/gi, "")
+    .replace(/<script[^>]*src=["']app\.js["'][^>]*><\/script>/gi, "");
 
   return withoutExternalAssets
-    .replace("</head>", "<style>\\n" + css + "\\n</style>\\n</head>")
-    .replace("</body>", "<script>\\n" + js + "\\n</script>\\n</body>");
+    .replace("</head>", "<style>\n" + css + "\n</style>\n</head>")
+    .replace("</body>", "<script>\n" + js + "\n</script>\n</body>");
 }
 
 function ProjectArtifact({ project }: { project: NovaProject }) {
