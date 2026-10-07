@@ -742,6 +742,7 @@ function Home() {
                   className="nova-file-input"
                   tabIndex={-1}
                   aria-hidden="true"
+                  hidden
                   type="file"
                   accept="image/png,image/jpeg,image/webp,application/pdf,text/plain,text/markdown,text/csv,application/json"
                   onChange={(event) => {
