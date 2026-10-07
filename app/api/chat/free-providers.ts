@@ -197,8 +197,8 @@ async function callDirectProvider(
 }
 
 async function callGateway(plan: NovaGatewayPlan, body: Record<string, unknown>) {
-  const base = (env("NOVA_GATEWAY_URL") || "").replace(/\/+$/, "");
-  const key = env("NOVA_GATEWAY_API_KEY");
+  const base = (env("NOVA_GATEWAY_URL") || (env("OPENROUTER_API_KEY") ? "https://openrouter.ai/api/v1" : "")).replace(/\/+$/, "");
+  const key = env("NOVA_GATEWAY_API_KEY") || env("OPENROUTER_API_KEY");
   const model = plan.model;
   if (!base || !key || !model) return null;
 
@@ -322,8 +322,8 @@ export function getNovaProviderCapabilities(): NovaProviderCapability[] {
       return {
         id,
         label: "NOVA Gateway",
-        configured: Boolean(env("NOVA_GATEWAY_URL") && env("NOVA_GATEWAY_API_KEY") && env("NOVA_GATEWAY_MODEL")),
-        model: env("NOVA_GATEWAY_MODEL") || null,
+        configured: Boolean((env("NOVA_GATEWAY_URL") && env("NOVA_GATEWAY_API_KEY")) || env("OPENROUTER_API_KEY")),
+        model: env("NOVA_GATEWAY_MODEL") || (env("OPENROUTER_API_KEY") ? "openrouter/free" : null),
         role: "gateway",
       };
     }
