@@ -221,6 +221,7 @@ export async function requestNovaIntelligence(
     const provider = providerConfig(id);
     if (!provider || !hasDirectProvider(provider)) continue;
 
+    const startedAt = Date.now();
     const attempt = await callDirectProvider(provider, body);
     if (!attempt) continue;
 
