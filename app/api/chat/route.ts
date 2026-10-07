@@ -14,7 +14,20 @@ export async function POST(req:Request){
   const attempt=await requestNovaIntelligence(plan,{messages:[{role:"system",content:buildNovaSystem(plan,objective)},...messages],stream:true,...(plan.useWeb?{tools:[{type:"openrouter:web_search"}],tool_choice:"auto",max_tool_calls:plan.deepResearch?6:2}: {})});
   if(!attempt)return new Response("NOVA gateway is not configured. Set NOVA_GATEWAY_URL, NOVA_GATEWAY_API_KEY, and an exact NOVA_GATEWAY_MODEL.",{status:503});
   if(!attempt.response.ok||!attempt.response.body){const d=await attempt.response.text().catch(()=>"");return new Response(failure(attempt.response.status,d),{status:200})}
+  const contentType=attempt.response.headers.get("content-type")||"";
   const reader=attempt.response.body.getReader(),decoder=new TextDecoder(),encoder=new TextEncoder();
+  if(!contentType.includes("text/event-stream")){
+    const raw=await new Response(attempt.response.body).text();
+    let output=raw.trim(),usage:Usage|null=null;
+    try{
+      const json=JSON.parse(output);
+      const content=json?.choices?.[0]?.message?.content;
+      if(typeof content==="string")output=content;
+      if(json?.usage)usage={prompt_tokens:Number(json.usage.prompt_tokens||0),completion_tokens:Number(json.usage.completion_tokens||0),total_tokens:Number(json.usage.total_tokens||0),cost:typeof json.usage.cost==="number"?json.usage.cost:undefined};
+    }catch{}
+    const body=output+(usage?MARK+JSON.stringify(usage):"");
+    return new Response(body,{headers:{"Content-Type":"text/plain; charset=utf-8","Cache-Control":"no-cache, no-transform","X-NOVA-Intent":plan.intent,"X-NOVA-Provider":attempt.label,"X-NOVA-Shield":plan.shield.risk,"X-NOVA-Runtime":"enabled"}});
+  }
   const stream=new ReadableStream<Uint8Array>({async start(controller){let buf="",usage:Usage|null=null;try{while(true){const{done,value}=await reader.read();if(done)break;buf+=decoder.decode(value,{stream:true});const events=buf.split(/\r?\n\r?\n/);buf=events.pop()||"";for(const e of events){const u=emit(e,controller,encoder);if(u)usage=u}}buf+=decoder.decode();if(buf){const u=emit(buf,controller,encoder);if(u)usage=u}if(usage)controller.enqueue(encoder.encode(MARK+JSON.stringify(usage)));controller.close()}catch(e){console.error("NOVA stream error",e);controller.error(e)}},cancel(){reader.cancel().catch(()=>{})}});
   return new Response(stream,{headers:{"Content-Type":"text/plain; charset=utf-8","Cache-Control":"no-cache, no-transform","X-NOVA-Intent":plan.intent,"X-NOVA-Provider":attempt.label,"X-NOVA-Shield":plan.shield.risk,"X-NOVA-Runtime":"enabled"}});
  }catch(e){return new Response("NOVA could not complete the request. Detail: "+detail(e instanceof Error?e.message:String(e)),{status:200})}
