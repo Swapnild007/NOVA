@@ -72,11 +72,23 @@ const providers: ProviderConfig[] = [
   },
 ];
 
-const order = () =>
-  (env("NOVA_PROVIDER_ORDER") || "gemini,mistral,groq,nvidia,zai,qwen,gateway")
-    .split(",")
-    .map((x) => x.trim().toLowerCase())
-    .filter(Boolean) as ProviderId[];
+function orderForPlan(plan: NovaGatewayPlan) {
+  const configured = env("NOVA_PROVIDER_ORDER");
+  if (configured) {
+    return configured.split(",").map((x) => x.trim().toLowerCase()).filter(Boolean) as ProviderId[];
+  }
+
+  const defaults: Record<NovaGatewayPlan["intent"], ProviderId[]> = {
+    general: ["gemini", "groq", "mistral", "nvidia", "zai", "qwen", "gateway"],
+    research: ["gemini", "mistral", "qwen", "groq", "nvidia", "zai", "gateway"],
+    create: ["gemini", "mistral", "groq", "nvidia", "zai", "qwen", "gateway"],
+    analyze: ["gemini", "mistral", "groq", "nvidia", "zai", "qwen", "gateway"],
+    build: ["gemini", "groq", "mistral", "nvidia", "qwen", "zai", "gateway"],
+    plan: ["gemini", "mistral", "groq", "nvidia", "zai", "qwen", "gateway"],
+    act: ["gemini", "groq", "mistral", "nvidia", "zai", "qwen", "gateway"],
+  };
+  return defaults[plan.intent];
+}
 
 function providerConfig(id: Exclude<ProviderId, "gateway">) {
   return providers.find((provider) => provider.id === id) || null;
@@ -96,7 +108,6 @@ function directBody(body: Record<string, unknown>) {
 
 async function callDirectProvider(
   provider: ProviderConfig,
-  plan: NovaGatewayPlan,
   body: Record<string, unknown>,
 ): Promise<NovaIntelligenceAttempt | null> {
   const key = env(provider.keyEnv);
@@ -171,7 +182,7 @@ export async function requestNovaIntelligence(
   plan: NovaGatewayPlan,
   body: Record<string, unknown>,
 ): Promise<NovaIntelligenceAttempt | null> {
-  for (const id of order()) {
+  for (const id of orderForPlan(plan)) {
     if (id === "gateway") {
       const gateway = await callGateway(plan, body);
       if (gateway?.response.ok) return gateway;
@@ -182,7 +193,7 @@ export async function requestNovaIntelligence(
     const provider = providerConfig(id);
     if (!provider || !hasDirectProvider(provider)) continue;
 
-    const attempt = await callDirectProvider(provider, plan, body);
+    const attempt = await callDirectProvider(provider, body);
     if (!attempt) continue;
 
     if (attempt.response.ok) return attempt;
@@ -203,7 +214,7 @@ export async function requestNovaIntelligence(
 }
 
 export function getConfiguredNovaProviders() {
-  return order()
+  return orderForPlan({ intent: "general", model: "", fallbackModels: [], useWeb: false, deepResearch: false, contextMessages: 20, shield: { risk: "low", redactedText: "", findings: [] } } as NovaGatewayPlan)
     .map((id) => id === "gateway" ? "NOVA Gateway" : providerConfig(id))
     .filter((provider): provider is ProviderConfig | "NOVA Gateway" =>
       provider === "NOVA Gateway" || Boolean(provider && hasDirectProvider(provider))
