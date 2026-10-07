@@ -10,14 +10,19 @@ NOVA is intentionally split into layers:
 2. **Cognition**: intent detection, planning, capability selection, verification, memory-ready context.
 3. **Capabilities**: talk, research, create, analyze, build, files, vision, voice and actions.
 4. **NOVA Shield**: prompt-injection awareness, secret redaction and trust-boundary rules.
-5. **Intelligence gateway**: one OpenAI-compatible gateway credential, with model routing handled outside NOVA.
+5. **Intelligence routing**: a free-first direct-provider core with adaptive health-aware failover and an optional external gateway fallback.
 6. **Evaluation**: regression cases for reasoning, research, build, analysis, security and actions.
 
 The goal is one NOVA intelligence, not a collection of provider-specific experiences.
 
-## Gateway
+## Intelligence providers
 
-NOVA is designed to use one server-side gateway credential. It must not contain direct Gemini, Groq, OpenRouter, or other provider API keys.
+NOVA uses a free-first provider core. Direct provider credentials are server-side only, and NOVA can fail over between independently configured providers when quotas, outages, model access, or transient errors occur.
+
+Provider health is tracked in the running server process so recently failing providers can be temporarily deprioritized. Because serverless instances are ephemeral, this is an instance-local optimization, not a global quota database.
+
+An external OpenAI-compatible gateway is optional and remains a fallback, not a requirement for NOVA to function.
+
 
 For Cheaper Inference / OmniRoute-compatible routing:
 
