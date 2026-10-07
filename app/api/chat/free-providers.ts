@@ -266,7 +266,7 @@ export type NovaProviderCapability = {
 };
 
 export function getNovaProviderCapabilities(): NovaProviderCapability[] {
-  const ids = orderForPlan({ intent: "general" } as NovaGatewayPlan);
+  const ids: ProviderId[] = ["gemini", "groq", "mistral", "gateway"];
   return ids.map((id) => {
     if (id === "gateway") {
       return {
