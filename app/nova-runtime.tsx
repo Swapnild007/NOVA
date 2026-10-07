@@ -1,12 +1,74 @@
 "use client";
 
+import * as React from "react";
+
 import {
   AssistantRuntimeProvider,
   useLocalRuntime,
   type ChatModelAdapter,
+  type ThreadMessageLike,
 } from "@assistant-ui/react";
 
 const USAGE_MARKER = "__NOVA_USAGE__";
+
+const CHAT_HISTORY_KEY = "nova-chat-history-v1";
+const ACTIVE_CHAT_KEY = "nova-active-chat-id";
+const THREAD_SWITCH_EVENT = "nova-thread-switch";
+
+type PersistedChat = {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  messages: Array<{
+    role: "user" | "assistant" | "system";
+    text: string;
+    createdAt: string;
+  }>;
+};
+
+function getActiveChatId() {
+  return localStorage.getItem(ACTIVE_CHAT_KEY) || "chat-" + Date.now().toString(36);
+}
+
+function readChatHistory(): PersistedChat[] {
+  try {
+    const raw = localStorage.getItem(CHAT_HISTORY_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as PersistedChat[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function messagesForChat(id: string): ThreadMessageLike[] {
+  const chat = readChatHistory().find((item) => item.id === id);
+  return (chat?.messages || []).map((message) => ({
+    role: message.role,
+    content: [{ type: "text", text: message.text }],
+    createdAt: new Date(message.createdAt),
+  }));
+}
+
+function ensureActiveChat() {
+  const id = getActiveChatId();
+  localStorage.setItem(ACTIVE_CHAT_KEY, id);
+  const history = readChatHistory();
+  if (!history.some((chat) => chat.id === id)) {
+    const now = new Date().toISOString();
+    const next: PersistedChat = {
+      id,
+      title: "New chat",
+      createdAt: now,
+      updatedAt: now,
+      messages: [],
+    };
+    localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify([next, ...history].slice(0, 50)));
+  }
+  return id;
+}
+
 const PENDING_ATTACHMENT_KEY = "nova-pending-attachment";
 
 type UsagePayload = {
@@ -223,7 +285,22 @@ const adapter: ChatModelAdapter = {
 };
 
 export function NovaRuntime({ children }: { children: React.ReactNode }) {
-  const runtime = useLocalRuntime(adapter);
+  const [initialMessages] = React.useState<ThreadMessageLike[]>(() => {
+    if (typeof window === "undefined") return [];
+    const id = ensureActiveChat();
+    return messagesForChat(id);
+  });
+  const runtime = useLocalRuntime(adapter, { initialMessages });
+
+  React.useEffect(() => {
+    const handleSwitch = (event: Event) => {
+      const id = (event as CustomEvent<{ id: string }>).detail?.id;
+      if (!id) return;
+      runtime.thread.reset(messagesForChat(id));
+    };
+    window.addEventListener(THREAD_SWITCH_EVENT, handleSwitch);
+    return () => window.removeEventListener(THREAD_SWITCH_EVENT, handleSwitch);
+  }, [runtime]);
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>
