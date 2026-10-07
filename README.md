@@ -21,16 +21,16 @@ NOVA uses a strict free-provider core for its default production path. The core 
 
 Provider health is tracked in the running server process so recently failing providers can be temporarily deprioritized. Because serverless instances are ephemeral, this is an instance-local optimization, not a global quota database.
 
-An external OpenAI-compatible gateway is optional and remains a fallback, not a requirement for NOVA to function. Providers whose free access is only a trial, region-specific, or production-restricted are not part of the default core.
+An external gateway is optional and remains a fallback, not a requirement for NOVA to function. OpenRouter is the current free-compatible gateway path. OmniRoute is supported as a separate OpenAI-compatible gateway adapter and is disabled unless explicitly configured.
 
+OmniRoute integration expects:
 
-For Cheaper Inference / OmniRoute-compatible routing:
+- `NOVA_OMNIROUTE_URL`: the OmniRoute API base URL, normally ending in `/v1`
+- `NOVA_OMNIROUTE_API_KEY`: the gateway endpoint key when authentication is enabled
+- `NOVA_OMNIROUTE_MODEL`: an explicit model ID or routing target
+- `NOVA_OMNIROUTE_TIMEOUT_MS`: optional request timeout
 
-- Base URL: `https://api.cheaperinference.com/v1`
-- Chat endpoint: `/chat/completions`
-- Model: an exact model ID from the gateway's live catalog
-- Routing: `X-CI-Route: auto`
-- Optional zero-data-retention mode: `NOVA_GATEWAY_ZDR=true`
+NOVA never invents an OmniRoute model. This keeps the free-first policy explicit: only configure a free model/routing target if the deployment must remain free.
 
 Do not put gateway credentials in client-side code.
 
