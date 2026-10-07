@@ -12,6 +12,7 @@ import {
   useAuiState,
 } from "@assistant-ui/react";
 import { NovaRuntime } from "./nova-runtime";
+import { NovaMarkdown } from "./nova-markdown";
 
 type Theme = "system" | "light" | "dark";
 type SettingsSection =
@@ -104,7 +105,7 @@ function buildPreview(files: NovaProjectFile[]) {
   // Keep the preview renderer deliberately simple and parser-safe.
   // The generated project is self-contained inside the iframe.
   const withCss = index.replace(
-    /styles\\.css/g,
+    /styles\.css/g,
     "data:text/css,"
   );
 
@@ -277,7 +278,7 @@ function Message() {
         )}
       </div>
       <div className="message-text">
-        {text}
+        {message.role === "assistant" ? <NovaMarkdown>{text}</NovaMarkdown> : text}
       </div>
       <ErrorPrimitive.Root className="message-error">
         <ErrorPrimitive.Message />
