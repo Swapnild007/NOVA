@@ -255,3 +255,36 @@ export function getConfiguredNovaProviders() {
     )
     .map((provider) => typeof provider === "string" ? provider : provider.label);
 }
+
+
+export type NovaProviderCapability = {
+  id: ProviderId;
+  label: string;
+  configured: boolean;
+  model: string | null;
+  role: "direct" | "gateway";
+};
+
+export function getNovaProviderCapabilities(): NovaProviderCapability[] {
+  const ids = orderForPlan({ intent: "general" } as NovaGatewayPlan);
+  return ids.map((id) => {
+    if (id === "gateway") {
+      return {
+        id,
+        label: "NOVA Gateway",
+        configured: Boolean(env("NOVA_GATEWAY_URL") && env("NOVA_GATEWAY_API_KEY") && env("NOVA_GATEWAY_MODEL")),
+        model: env("NOVA_GATEWAY_MODEL") || null,
+        role: "gateway",
+      };
+    }
+
+    const provider = providerConfig(id);
+    return {
+      id,
+      label: provider?.label || id,
+      configured: Boolean(provider && hasDirectProvider(provider)),
+      model: provider ? env(provider.modelEnv) || provider.defaultModel || null : null,
+      role: "direct",
+    };
+  });
+}
