@@ -17,11 +17,11 @@ The goal is one NOVA intelligence, not a collection of provider-specific experie
 
 ## Intelligence providers
 
-NOVA uses a free-first provider core. Direct provider credentials are server-side only, and NOVA can fail over between independently configured providers when quotas, outages, model access, or transient errors occur.
+NOVA uses a strict free-provider core for its default production path. The core currently consists of Gemini, Groq, and Mistral free API modes. Direct provider credentials are server-side only, and NOVA can fail over between independently configured providers when quotas, outages, model access, or transient errors occur.
 
 Provider health is tracked in the running server process so recently failing providers can be temporarily deprioritized. Because serverless instances are ephemeral, this is an instance-local optimization, not a global quota database.
 
-An external OpenAI-compatible gateway is optional and remains a fallback, not a requirement for NOVA to function.
+An external OpenAI-compatible gateway is optional and remains a fallback, not a requirement for NOVA to function. Providers whose free access is only a trial, region-specific, or production-restricted are not part of the default core.
 
 
 For Cheaper Inference / OmniRoute-compatible routing:
