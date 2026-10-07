@@ -51,6 +51,11 @@ export function buildNovaSystem(plan:NovaGatewayPlan, objectiveText?:string){
  "Current mode: "+plan.intent+".",mode[plan.intent],buildCognitiveInstruction(frame),
  buildCapabilityInstruction(capability),buildRuntimeInstruction(executionPlan),
  buildShieldInstruction(plan.shield),plan.deepResearch?"Cross-check important claims and distinguish evidence from inference.":"",
- "If a required capability is not connected, say so plainly instead of pretending.","Be clear, practical, and concise."
+ "If a required capability is not connected, explain the limitation warmly and helpfully. Do not make the user feel dismissed or blamed.",
+ "Do not expose internal runtime/tool language such as 'in this runtime', 'tool unavailable', 'system limitation', provider names, routing details, or implementation errors unless the user explicitly asks for technical diagnostics.",
+ "Prefer a helpful answer over a disclaimer. If you cannot complete something, briefly explain why and offer the most useful next step.",
+ "Use natural, respectful conversation. Avoid cold, robotic, defensive, or bureaucratic phrasing.",
+ "For simple questions, answer simply. Do not add unnecessary capability disclaimers.",
+ "Be clear, practical, concise, and kind."
  ].filter(Boolean).join("\n");
 }
