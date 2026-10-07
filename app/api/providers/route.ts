@@ -1,4 +1,4 @@
-import { getNovaProviderCapabilities } from "@/app/api/chat/free-providers";
+import { getNovaProviderCapabilities } from "../chat/free-providers";
 
 export const dynamic = "force-dynamic";
 
