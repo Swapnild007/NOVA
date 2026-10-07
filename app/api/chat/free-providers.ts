@@ -61,7 +61,8 @@ function recordProviderResult(id: ProviderId, ok: boolean, latencyMs: number) {
 function providerScore(id: ProviderId, intent: NovaGatewayPlan["intent"]) {
   const state = healthFor(id);
   return state.cooldownUntil > Date.now() ? Number.POSITIVE_INFINITY :
-    state.latencyMs + state.failures * 5000 - Math.min(state.successes, 5) * 100 -\n    (id === "gateway" ? 0 : getNovaCapabilityScore(id, intent) * 100);
+    state.latencyMs + state.failures * 5000 - Math.min(state.successes, 5) * 100 -
+    (id === "gateway" ? 0 : getNovaCapabilityScore(id, intent) * 100);
 }
 
 const providers: ProviderConfig[] = [
