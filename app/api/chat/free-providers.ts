@@ -144,7 +144,7 @@ async function callDirectProvider(
 }
 
 async function callGateway(plan: NovaGatewayPlan, body: Record<string, unknown>) {
-  const base = (env("NOVA_GATEWAY_URL") || "").replace(/\\/+$/, "");
+  const base = (env("NOVA_GATEWAY_URL") || "").replace(/\/+$/, "");
   const key = env("NOVA_GATEWAY_API_KEY");
   const model = plan.model;
   if (!base || !key || !model) return null;
