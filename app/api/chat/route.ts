@@ -12,7 +12,7 @@ export async function POST(req:Request){
   const body=await req.json() as {messages?:unknown}, valid=sanitize(body.messages); if(!valid.length)return new Response("NOVA needs a message to begin.",{status:400});
   const plan=createNovaPlan(valid),messages=prepareNovaMessages(valid,plan.contextMessages),objective=textOf(messages.filter(m=>m.role==="user").at(-1)?.content);
   const attempt=await requestNovaIntelligence(plan,{messages:[{role:"system",content:buildNovaSystem(plan,objective)},...messages],stream:true,...(plan.useWeb?{tools:[{type:"openrouter:web_search"}],tool_choice:"auto",max_tool_calls:plan.deepResearch?6:2}: {})});
-  if(!attempt)return new Response("NOVA has no healthy intelligence provider configured. Add at least one direct provider key (Gemini, Mistral, Groq, NVIDIA, Z.AI or Qwen) or configure NOVA_GATEWAY_* as a fallback.",{status:503});
+  if(!attempt)return new Response("NOVA has no configured intelligence provider. Add at least one direct provider key (Gemini, Mistral or Groq), or configure NOVA_GATEWAY_* as a fallback.",{status:503});
   if(!attempt.response.ok||!attempt.response.body){const d=await attempt.response.text().catch(()=>"");return new Response(failure(attempt.response.status,d,attempt.label),{status:200})}
   const contentType=attempt.response.headers.get("content-type")||"";
   const reader=attempt.response.body.getReader(),decoder=new TextDecoder(),encoder=new TextEncoder();

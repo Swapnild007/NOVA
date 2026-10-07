@@ -210,10 +210,13 @@ export async function requestNovaIntelligence(
     return scoreDelta === 0 ? orderDelta : scoreDelta;
   });
 
+  let lastFailedAttempt: NovaIntelligenceAttempt | null = null;
+
   for (const id of [...ranked, ...ordered.filter((id) => id === "gateway")]) {
     if (id === "gateway") {
       const gateway = await callGateway(plan, body);
       if (gateway?.response.ok) return gateway;
+      if (gateway) lastFailedAttempt = gateway;
       if (gateway && gateway.response.status !== 429 && gateway.response.status < 500) return gateway;
       continue;
     }
@@ -230,6 +233,8 @@ export async function requestNovaIntelligence(
       return attempt;
     }
 
+    lastFailedAttempt = attempt;
+
     // Free tiers are expected to hit 401/402/403/404/429 as quotas or model
     // access change. Continue to the next independent provider instead of
     // taking NOVA offline.
@@ -243,7 +248,7 @@ export async function requestNovaIntelligence(
     return attempt;
   }
 
-  return null;
+  return lastFailedAttempt;
 }
 
 export function getConfiguredNovaProviders() {
