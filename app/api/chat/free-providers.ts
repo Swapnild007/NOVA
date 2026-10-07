@@ -334,7 +334,7 @@ export function getConfiguredNovaProviders() {
       provider === "NOVA Gateway" || provider === "OmniRoute" || Boolean(provider && hasDirectProvider(provider))
     )
     .map((provider) => typeof provider === "string" ? provider : provider.label);
-
+}
 
 export type NovaProviderCapability = {
   id: ProviderId;
