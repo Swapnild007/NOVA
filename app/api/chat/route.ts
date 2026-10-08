@@ -20,7 +20,7 @@ export async function POST(req:Request){
   const memory=sanitizeNovaMemory(body.memory),plan=createNovaPlan(valid),messages=prepareNovaMessages(valid,plan.contextMessages),objective=textOf(messages.filter(m=>m.role==="user").at(-1)?.content);
   const capability=selectNovaCapabilities(objective,plan.intent);
   if(capability.primary==="weather"){
-    const locationMatch=objective.match(/\\b(?:weather|forecast|temperature|rain|raining|humidity|wind|storm|sunny|cloudy)\\s+(?:in|for|at)\\s+(.+?)(?:[?.!]?$)/i);
+    const locationMatch=objective.match(/\b(?:weather|forecast|temperature|rain|raining|humidity|wind|storm|sunny|cloudy)\s+(?:in|for|at)\s+(.+?)(?:[?.!]?$)/i);
     const location=locationMatch?.[1]?.trim().replace(/[?.!]$/,"")||"";
     if(!location){
       return new Response("Which city or location should I check the weather for?",{headers:{"Content-Type":"text/plain; charset=utf-8","Cache-Control":"no-cache, no-transform","X-NOVA-Intent":plan.intent,"X-NOVA-Provider":"native-weather","X-NOVA-Shield":plan.shield.risk,"X-NOVA-Runtime":"enabled"}});
