@@ -309,7 +309,8 @@ const adapter: ChatModelAdapter = {
 
       fullText += decoder.decode(value, { stream: true });
 
-      saveNovaMemoryFromText(fullText);\n      saveNovaMemoryFromText(fullText);\n    const markerIndex = fullText.indexOf(USAGE_MARKER);
+      saveNovaMemoryFromText(fullText);
+      const markerIndex = fullText.indexOf(USAGE_MARKER);
       if (markerIndex >= 0) {
         const usageText = fullText.slice(markerIndex + USAGE_MARKER.length).trim();
         try {
@@ -332,6 +333,7 @@ const adapter: ChatModelAdapter = {
     }
 
     fullText += decoder.decode();
+    saveNovaMemoryFromText(fullText);
 
     const markerIndex = fullText.indexOf(USAGE_MARKER);
     if (markerIndex >= 0) {
