@@ -107,6 +107,5 @@ export function buildCapabilityInstruction(decision: CapabilityDecision) {
     "Selection rationale: " + decision.rationale.join("; "),
     "Use only capabilities actually connected to this runtime.",
     "If a capability is unavailable, do not simulate its result.",
-  ].join("
-");
+  ].join("\n");
 }
