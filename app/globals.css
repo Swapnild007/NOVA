@@ -1104,6 +1104,18 @@ h1 {
   line-height: 1.6;
 }
 
+.usage-source {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.usage-source .settings-note {
+  margin: 0;
+}
+
 .danger-button {
   margin-top: 18px;
   align-self: flex-start;
