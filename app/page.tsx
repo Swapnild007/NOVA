@@ -759,6 +759,38 @@ function ChatHistoryPanel({
   );
 }
 
+function NovaSideRail({ isEmpty, chats, onNew, onHistory, onSettings, onPrompt }: { isEmpty:boolean; chats:PersistedChat[]; onNew:()=>void; onHistory:()=>void; onSettings:()=>void; onPrompt:(text:string)=>void }) {
+  const nav = [
+    ["⌂","Home",""],["◷","Chat History","history"],["✓","Tasks","Plan something for me."],["□","Projects","Help me organize my projects."],
+    ["◇","Memory","What do you remember about me?"],["◎","Goals","Help me define my goals."],["▣","Calendar","Help me plan my schedule."],["▤","Files","Analyze my files."],
+    ["⌘","Connected Apps","Show me what I can connect."],["↻","Automations","What could NOVA automate for me?"],["✧","Explore Tools","What tools can NOVA use?"]
+  ] as const;
+  return <aside className="nova-side-rail" aria-label="NOVA workspace navigation">
+    <div className="side-brand"><span className="side-brand-mark">N</span><span>NOVA</span></div>
+    <button type="button" className="side-new-chat" onClick={onNew}><span>＋</span><strong>New Chat</strong><kbd>Ctrl K</kbd></button>
+    <nav className="side-nav">{nav.map(([icon,label,value]) => <button type="button" key={label} className={label==="Home"&&isEmpty?"side-nav-item active":"side-nav-item"} onClick={() => label==="Chat History"?onHistory():value?onPrompt(value):undefined}><span className="side-nav-icon">{icon}</span><span>{label}</span></button>)}</nav>
+    <div className="side-divider" />
+    <div className="side-recent-head"><span>Recent Chats</span><button type="button" onClick={onHistory}>View all</button></div>
+    <div className="side-recent">{chats.slice(0,7).map(chat=><button type="button" key={chat.id} onClick={onHistory} title={chat.title}><span>▱</span>{chat.title||"New chat"}</button>)}{chats.length===0&&<span className="side-empty">Your conversations appear here.</span>}</div>
+    <button type="button" className="side-profile" onClick={onSettings}><span className="side-avatar">S</span><span><strong>Swapnil</strong><small>Personal NOVA</small></span><span className="side-gear">⚙</span></button>
+  </aside>;
+}
+function NovaRightRail({ isRunning, messageCount, onPrompt }: { isRunning:boolean; messageCount:number; onPrompt:(text:string)=>void }) {
+  return <aside className="nova-right-rail" aria-label="NOVA status">
+    <section className="status-card"><div className="status-card-head"><strong>NOVA Status</strong><span className="online-pill"><i /> Online</span></div>
+      <div className="status-grid"><div><span>◉</span><small>Thinking</small><strong>Adaptive</strong></div><div><span>◈</span><small>Memory</small><strong>Active</strong></div><div><span>⌘</span><small>Tools</small><strong>Connected</strong></div><div><span>✓</span><small>Verification</small><strong>Enabled</strong></div></div>
+    </section>
+    <section className="status-card"><div className="status-card-head"><strong>Today's Activity</strong><button type="button">View all</button></div>
+      <div className="activity-list"><div><span>✓</span><p><strong>{messageCount}</strong> messages in this workspace</p></div><div><span>◌</span><p>Adaptive reasoning is ready</p></div><div><span>◇</span><p>Memory context is available</p></div><div><span>⌁</span><p>{isRunning?"NOVA is working now":"No active task"}</p></div></div>
+    </section>
+    <section className="status-card quick-card"><div className="status-card-head"><strong>Quick Start</strong></div>
+      <button type="button" onClick={()=>onPrompt("Research this topic deeply and give me a verified answer with sources.")}>Deep Research <span>→</span></button>
+      <button type="button" onClick={()=>onPrompt("Analyze this carefully and give me the important findings and next steps.")}>Analyze <span>→</span></button>
+      <button type="button" onClick={()=>onPrompt("Help me build this step by step and validate the implementation.")}>Build <span>→</span></button>
+    </section>
+    <section className="insight-card"><span className="insight-icon">✦</span><strong>NOVA Intelligence</strong><p>One conversation surface over models, memory, tools, planning and verification.</p></section>
+  </aside>;
+}
 function Home() {
   const aui = useAui();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -916,195 +948,54 @@ function Home() {
     setAttachment(null);
   };
 
+  const prompt = (text:string) => aui.composer.setText(text);
+
   return (
-    <main className={`nova-shell ${isEmpty ? "is-empty" : "has-chat"}`}>
-      <div className={`nova-intro ${intro ? "is-visible" : "is-hidden"}`}>
-        <div className="intro-mark">N</div>
-        <div className="intro-name">NOVA</div>
-      </div>
-
-      <header className="topbar">
-        <button type="button" className="brand brand-button" onClick={() => setHistoryOpen(true)} title="Open chat history">
-          <span className="brand-mark">N</span>
-          <span>NOVA</span>
-        </button>
-
-        <div className="topbar-actions">
-          {!isEmpty && (
-            <button type="button" className="new-chat-button" onClick={createChat}>
-              New chat
-            </button>
-          )}
-          <div className="menu-wrap" ref={menuRef}>
-            <button
-              type="button"
-              className="quiet-button"
-              aria-label="Open NOVA menu"
-              aria-expanded={menuOpen}
-              onClick={() => setMenuOpen((open) => !open)}
-            >
-              •••
-            </button>
-
-            {menuOpen && (
-              <div className="workspace-menu">
-                <button type="button" onClick={() => setComposerValue("What can you help me with?")}>What can you do?</button>
-                <button type="button" onClick={() => setComposerValue("Help me plan something.")}>Start planning</button>
-                <button type="button" onClick={() => setComposerValue("Help me solve a problem.")}>Solve a problem</button>
-                <div className="menu-divider" />
-                <button type="button" onClick={() => { setHistoryOpen(true); setMenuOpen(false); }}>Chat history</button>
-                <button type="button" onClick={createChat}>New chat</button>
-                <div className="menu-divider" />
-                <button type="button" onClick={() => { setSettingsOpen(true); setMenuOpen(false); }}>Settings</button>
-              </div>
-            )}
-          </div>
-        </div>
-      </header>
-
-      <section className="workspace">
-        <AuiIf condition={(state) => state.thread.isEmpty}>
-          <div className="hero-copy">
-            <span className="eyebrow">INTELLIGENCE, CONNECTED</span>
-            <h1>What are we<br />working on?</h1>
-            <p>Think, create, research, analyze and act from one place.</p>
-          </div>
-        </AuiIf>
-
-        <ThreadPrimitive.Root className="thread">
-          <ThreadPrimitive.Viewport
-            className="thread-viewport"
-            turnAnchor="top"
-            scrollToBottomOnRunStart
-          >
-            <ThreadPrimitive.Messages>
-              {() => <Message />}
-            </ThreadPrimitive.Messages>
-          </ThreadPrimitive.Viewport>
-
-          <ThreadPrimitive.ViewportFooter className="thread-footer">
-            <ComposerPrimitive.Root className="composer">
-              <ComposerPrimitive.Input
-                className="composer-input"
-                placeholder="Ask NOVA anything..."
-                submitOnEnter
-                autoFocus
-              />
-
-              <div className="composer-footer">
-                <input
-                  ref={fileInputRef}
-                  className="nova-file-input"
-                  tabIndex={-1}
-                  aria-hidden="true"
-                  hidden
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp,application/pdf,text/plain,text/markdown,text/csv,application/json"
-                  onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    if (file) handleAttachment(file);
-                    event.currentTarget.value = "";
-                  }}
-                />
-                <div className="composer-tools">
-                  <div className="composer-menu-wrap">
-                    <button
-                      type="button"
-                      className={composerMenuOpen ? "tool-button is-active" : "tool-button"}
-                      aria-label="Open tools"
-                      aria-expanded={composerMenuOpen}
-                      onClick={() => setComposerMenuOpen((open) => !open)}
-                    >
-                      +
-                    </button>
-
-                    {composerMenuOpen && (
-                      <div className="composer-menu" role="menu">
-                        <button type="button" role="menuitem" onClick={chooseAttachment}>
-                          <span className="composer-menu-icon">＋</span>
-                          <span>
-                            <strong>Add photos & files</strong>
-                            <small>Images, PDFs and text files</small>
-                          </span>
-                        </button>
-                        <button type="button" role="menuitem" onClick={() => { aui.composer.setText("Create an image for me."); setComposerMenuOpen(false); }}>
-                          <span className="composer-menu-icon">✦</span>
-                          <span><strong>Create image</strong></span>
-                        </button>
-                        <button type="button" role="menuitem" onClick={() => { aui.composer.setText("Do deep research on this."); setComposerMenuOpen(false); }}>
-                          <span className="composer-menu-icon">◎</span>
-                          <span><strong>Deep research</strong></span>
-                        </button>
-                        <button type="button" role="menuitem" onClick={() => { aui.composer.setText("Search the web for this."); setComposerMenuOpen(false); }}>
-                          <span className="composer-menu-icon">⌕</span>
-                          <span><strong>Web search</strong></span>
-                        </button>
-                        <button type="button" role="menuitem" onClick={() => setComposerMenuOpen(false)}>
-                          <span className="composer-menu-icon">•••</span>
-                          <span><strong>More</strong></span>
-                        </button>
-                      </div>
-                    )}
+    <main className={`nova-shell nova-command-center ${isEmpty ? "is-empty" : "has-chat"}`}>
+      <div className={`nova-intro ${intro ? "is-visible" : "is-hidden"}`}><div className="intro-mark">N</div><div className="intro-name">NOVA</div></div>
+      <NovaSideRail isEmpty={isEmpty} chats={chatHistory} onNew={createChat} onHistory={()=>setHistoryOpen(true)} onSettings={()=>{setSettingsOpen(true);setSettingsSection("General");}} onPrompt={prompt} />
+      <section className="nova-main-column">
+        <header className="topbar nova-command-topbar">
+          <div className="topbar-title"><span className="topbar-nova-dot" /><strong>NOVA</strong><span>Your Personal AI System</span></div>
+          <nav className="command-tabs">{[["Chat",""],["Create","Create something for me."],["Research","Research this deeply and verify the important claims."],["Analyze","Analyze this carefully and show the important findings."],["Build","Help me build this step by step."],["Plan","Help me plan this with dependencies and next steps."]].map(([label,value])=><button type="button" key={label} className={label==="Chat"?"selected":""} onClick={()=>value&&prompt(value)}>{label}</button>)}<button type="button" className="command-more" onClick={()=>setMenuOpen(o=>!o)}>More⌄</button></nav>
+          <div className="topbar-actions"><button type="button" className="quiet-button" aria-label="Search">⌕</button><button type="button" className="quiet-button" aria-label="Notifications">♧</button><button type="button" className="top-avatar" onClick={()=>{setSettingsOpen(true);setSettingsSection("General");}}>S</button></div>
+        </header>
+        <div className="command-workspace">
+          <AuiIf condition={state=>state.thread.isEmpty}><div className="hero-copy command-hero"><span className="eyebrow">INTELLIGENCE, CONNECTED</span><h1>What would you like<br />to accomplish today?</h1><p>Ask anything. Give NOVA a task. Let the system figure out what is required.</p></div></AuiIf>
+          <ThreadPrimitive.Root className="thread">
+            <ThreadPrimitive.Viewport className="thread-viewport" turnAnchor="top" scrollToBottomOnRunStart><ThreadPrimitive.Messages>{()=> <Message />}</ThreadPrimitive.Messages></ThreadPrimitive.Viewport>
+            <ThreadPrimitive.ViewportFooter className="thread-footer">
+              <ComposerPrimitive.Root className="composer command-composer">
+                <ComposerPrimitive.Input className="composer-input" placeholder="Ask anything, or give NOVA a task..." submitOnEnter autoFocus />
+                <div className="composer-footer">
+                  <input ref={fileInputRef} className="nova-file-input" tabIndex={-1} aria-hidden="true" hidden type="file" accept="image/png,image/jpeg,image/webp,application/pdf,text/plain,text/markdown,text/csv,application/json" onChange={event=>{const file=event.target.files?.[0];if(file)handleAttachment(file);event.currentTarget.value="";}} />
+                  <div className="composer-tools">
+                    <div className="composer-menu-wrap"><button type="button" className={composerMenuOpen?"tool-button is-active":"tool-button"} aria-label="Open tools" aria-expanded={composerMenuOpen} onClick={()=>setComposerMenuOpen(o=>!o)}>＋</button>
+                      {composerMenuOpen&&<div className="composer-menu" role="menu">
+                        <button type="button" role="menuitem" onClick={chooseAttachment}><span className="composer-menu-icon">＋</span><span><strong>Add photos & files</strong><small>Images, PDFs and text files</small></span></button>
+                        <button type="button" role="menuitem" onClick={()=>{prompt("Create an image for me.");setComposerMenuOpen(false);}}><span className="composer-menu-icon">✦</span><span><strong>Create image</strong></span></button>
+                        <button type="button" role="menuitem" onClick={()=>{prompt("Do deep research on this.");setComposerMenuOpen(false);}}><span className="composer-menu-icon">◎</span><span><strong>Deep research</strong></span></button>
+                        <button type="button" role="menuitem" onClick={()=>{prompt("Search the web for this.");setComposerMenuOpen(false);}}><span className="composer-menu-icon">⌕</span><span><strong>Web search</strong></span></button>
+                      </div>}
+                    </div>
+                    <VoiceButton /><button type="button" className="composer-mode-pill" onClick={()=>prompt("Do deep research on this.")}>◉ Deep Research⌄</button>
                   </div>
-                  <VoiceButton />
+                  <div className="composer-actions"><AuiIf condition={state=>state.thread.isRunning}><button type="button" className="stop-button" onClick={()=>aui.thread.cancelRun()} aria-label="Stop response">■</button></AuiIf><ComposerPrimitive.Send className="send-button" aria-label="Send message"><span>↑</span></ComposerPrimitive.Send></div>
                 </div>
-
-                <div className="composer-actions">
-                  <AuiIf condition={(state) => state.thread.isRunning}>
-                    <button type="button" className="stop-button" onClick={() => aui.thread.cancelRun()} aria-label="Stop response">■</button>
-                  </AuiIf>
-                  <ComposerPrimitive.Send className="send-button" aria-label="Send message">
-                    <span>↑</span>
-                  </ComposerPrimitive.Send>
-                </div>
-              </div>
-            </ComposerPrimitive.Root>
-          </ThreadPrimitive.ViewportFooter>
-        </ThreadPrimitive.Root>
-
-        {isEmpty && (
-          <div className="capabilities" aria-label="NOVA capabilities">
-            {Object.keys(capabilityPrompts).map((capability) => (
-              <button type="button" key={capability} onClick={() => aui.composer.setText(capabilityPrompts[capability])}>
-                {capability}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {isRunning && <div className="run-status"><span /> NOVA is working</div>}
+              </ComposerPrimitive.Root>
+            </ThreadPrimitive.ViewportFooter>
+          </ThreadPrimitive.Root>
+          {isEmpty&&<div className="command-capability-grid">{[["◉","Deep Research","Research anything with verified sources.","Research this topic deeply."],["✦","Create","Generate high-quality content and ideas.","Help me create this from scratch."],["▥","Analyze","Understand data and complex information.","Analyze this carefully."],["⌘","Build","Create apps, code and workflows.","Help me build this step by step."],["□","Plan","Turn goals into actionable plans.","Help me plan this."],["↻","Automate","Turn repeatable work into systems.","What could NOVA automate for me?"]].map(([icon,title,desc,value])=><button type="button" key={title} className="command-capability-card" onClick={()=>prompt(value)}><span className="capability-icon">{icon}</span><strong>{title}</strong><small>{desc}</small></button>)}</div>}
+          {!isEmpty&&<section className="nova-current-task"><div className="task-head"><div><span className="task-kicker">CURRENT WORKSPACE</span><h2>{isRunning?"NOVA is working on your request":"Conversation workspace"}</h2></div><span className={isRunning?"task-status working":"task-status"}>{isRunning?"Working":"Ready"}</span></div><div className="task-progress"><span className={isRunning?"progress-fill working":"progress-fill"} /></div><div className="task-steps"><span className="done">✓ Understand</span><span className={isRunning?"active":"done"}>{isRunning?"● Execute":"✓ Plan"}</span><span>○ Verify</span><span>○ Complete</span></div></section>}
+          {isRunning&&<div className="run-status"><span /> NOVA is working</div>}
+        </div>
       </section>
-
-      <footer className="footer">
-        <span>One intelligence layer.</span>
-        <span>Private by design.</span>
-      </footer>
-
-      {historyOpen && (
-        <ChatHistoryPanel
-          chats={chatHistory}
-          activeId={activeChat}
-          search={historySearch}
-          setSearch={setHistorySearch}
-          onSelect={switchChat}
-          onNew={createChat}
-          onRename={renameChat}
-          onDelete={deleteChat}
-          onClose={() => setHistoryOpen(false)}
-        />
-      )}
-
-      {settingsOpen && (
-        <SettingsModal
-          section={settingsSection}
-          setSection={setSettingsSection}
-          onClose={() => setSettingsOpen(false)}
-        />
-      )}
+      <NovaRightRail isRunning={isRunning} messageCount={messages.length} onPrompt={prompt} />
+      <footer className="footer"><span>One intelligence layer.</span><span>Private by design.</span></footer>
+      {historyOpen&&<ChatHistoryPanel chats={chatHistory} activeId={activeChat} search={historySearch} setSearch={setHistorySearch} onSelect={switchChat} onNew={createChat} onRename={renameChat} onDelete={deleteChat} onClose={()=>setHistoryOpen(false)} />}
+      {settingsOpen&&<SettingsModal section={settingsSection} setSection={setSettingsSection} onClose={()=>setSettingsOpen(false)} />}
     </main>
   );
-}
-
 export default function Page() {
   return (
     <NovaRuntime>
