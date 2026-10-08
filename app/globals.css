@@ -1931,8 +1931,15 @@ h1 {
   }
   .nova-command-center::after { display: none; }
   .nova-side-rail { display: none; }
-  .nova-main-column { height: 100dvh; }
-  .nova-command-topbar { height: 58px; flex-basis: 58px; padding: 0 10px; }
+  .nova-main-column { height: 100dvh; padding-top: 58px; }
+  .nova-command-topbar {
+    position: fixed;
+    inset: 0 0 auto 0;
+    width: 100%;
+    height: 58px;
+    flex: 0 0 58px;
+    padding: 0 10px;
+  }
   .command-tabs { display: none; }
   .topbar-title { margin-right: auto; }
   .command-workspace {
@@ -1964,11 +1971,15 @@ h1 {
 /* Android desktop-mode fallback: Chrome can expose a 980px virtual viewport on a phone
    and scale the page down to fit the physical screen. Keep the mobile composition
    fluid at that width instead of constraining it to a narrow 720px canvas. */
-@media (min-width: 761px) and (max-width: 980px) {
+@media (min-width: 761px) and (max-width: 1100px) {
   .nova-command-center .nova-command-topbar {
     height: 76px;
     flex-basis: 76px;
     padding-inline: 20px;
+  }
+
+  .nova-main-column {
+    padding-top: 76px;
   }
 
   .command-workspace {
