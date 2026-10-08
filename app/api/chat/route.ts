@@ -1,6 +1,7 @@
 import {buildNovaSystem,createNovaPlan,prepareNovaMessages} from "./nova-gateway";
 import {requestNovaIntelligence} from "./intelligence-gateway";
-import {executeNovaCapability} from "./nova-capability-runtime";
+import {createNovaExecutionPlan} from "./nova-capability-runtime";
+import {runNovaCapability} from "./nova-execution-runner";
 import {selectNovaCapabilities} from "./nova-capability";
 export const runtime="nodejs"; export const dynamic="force-dynamic";
 type Msg={role:"user"|"assistant"|"system";content:any};
@@ -23,22 +24,26 @@ export async function POST(req:Request){
     if(!location){
       return new Response("Which city or location should I check the weather for?",{headers:{"Content-Type":"text/plain; charset=utf-8","Cache-Control":"no-cache, no-transform","X-NOVA-Intent":plan.intent,"X-NOVA-Provider":"native-weather","X-NOVA-Shield":plan.shield.risk,"X-NOVA-Runtime":"enabled"}});
     }
-    const result=await executeNovaCapability("weather.current",{objective,input:location});
-    if(result.ok&&result.verified){
+    const executionPlan=createNovaExecutionPlan(capability);
+    const execution=await runNovaCapability(capability,executionPlan,{objective,input:location});
+    const result=execution.result;
+    if(execution.record.state==="completed"&&result.ok&&result.verified){
       const data=result.output as any;
       const current=data.weather.current;
       const daily=data.weather.daily;
       const code=Number(current.weather_code);
       const labels:Record<number,string>={0:"clear sky",1:"mainly clear",2:"partly cloudy",3:"overcast",45:"foggy",48:"foggy",51:"light drizzle",53:"drizzle",55:"heavy drizzle",61:"light rain",63:"rain",65:"heavy rain",71:"light snow",73:"snow",75:"heavy snow",80:"rain showers",81:"rain showers",82:"heavy rain showers",95:"thunderstorm",96:"thunderstorm",99:"thunderstorm"};
       const place=data.place.name+(data.place.country?", "+data.place.country:"");
-      const text="Weather in "+place+": "+Math.round(Number(current.temperature_2m))+"°C, "+(labels[code]||"current conditions")+". Feels like "+Math.round(Number(current.apparent_temperature))+"°C, humidity "+Math.round(Number(current.relative_humidity_2m))+"%, wind "+Math.round(Number(current.wind_speed_10m))+" km/h. Today's high is "+Math.round(Number(daily.temperature_2m_max?.[0]))+"°C and low "+Math.round(Number(daily.temperature_2m_min?.[0]))+"°C, with "+Math.round(Number(daily.precipitation_probability_max?.[0]||0))+"% precipitation probability.");
+      const text="Weather in "+place+": "+Math.round(Number(current.temperature_2m))+"°C, "+(labels[code]||"current conditions")+". Feels like "+Math.round(Number(current.apparent_temperature))+"°C, humidity "+Math.round(Number(current.relative_humidity_2m))+"%, wind "+Math.round(Number(current.wind_speed_10m))+" km/h. Today's high is "+Math.round(Number(daily.temperature_2m_max?.[0]))+"°C and low "+Math.round(Number(daily.temperature_2m_min?.[0]))+"°C, with "+Math.round(Number(daily.precipitation_probability_max?.[0]||0))+"% precipitation probability.";
       return new Response(text,{headers:{"Content-Type":"text/plain; charset=utf-8","Cache-Control":"no-cache, no-transform","X-NOVA-Intent":plan.intent,"X-NOVA-Provider":"native-weather","X-NOVA-Shield":plan.shield.risk,"X-NOVA-Runtime":"enabled"}});
     }
     return new Response("NOVA could not retrieve verified weather data for "+location+".",{headers:{"Content-Type":"text/plain; charset=utf-8","Cache-Control":"no-cache, no-transform","X-NOVA-Intent":plan.intent,"X-NOVA-Provider":"native-weather","X-NOVA-Shield":plan.shield.risk,"X-NOVA-Runtime":"enabled"}});
   }
   if(capability.primary==="time"){
-    const result=await executeNovaCapability("time.now",{objective,input:timezone});
-    if(result.ok&&result.verified){
+    const executionPlan=createNovaExecutionPlan(capability);
+    const execution=await runNovaCapability(capability,executionPlan,{objective,input:timezone});
+    const result=execution.result;
+    if(execution.record.state==="completed"&&result.ok&&result.verified){
       const local=String((result.output as {local?:string})?.local||"");
       const text=local?("Today is "+local.split(" at ")[0]+"."):"NOVA could not resolve the requested date/time.";
       return new Response(text,{headers:{"Content-Type":"text/plain; charset=utf-8","Cache-Control":"no-cache, no-transform","X-NOVA-Intent":plan.intent,"X-NOVA-Provider":"native-time","X-NOVA-Shield":plan.shield.risk,"X-NOVA-Runtime":"enabled"}});

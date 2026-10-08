@@ -7,6 +7,7 @@ export type NovaCapabilityRegistryEntry = { id:NovaCapability; label:string; sta
 
 const metadata:Record<NovaCapability,Omit<NovaCapabilityRegistryEntry,"status"|"tool">>={
  time:{id:"time",label:"Date & Time",requirement:"NOVA local clock and valid IANA timezone",permission:"none",executionRule:"Resolve date/time locally for the supplied timezone; never guess when timezone resolution fails."},
+ weather:{id:"weather",label:"Weather",requirement:"Native Open-Meteo weather service and a resolved location",permission:"none",executionRule:"Resolve the requested location and return verified current conditions; fail closed when location or weather data cannot be resolved."},
  reason:{id:"reason",label:"Reasoning",requirement:"NOVA core inference",permission:"none",executionRule:"Reason using the connected intelligence provider; never invent unavailable execution."},
  research:{id:"research",label:"Research",requirement:"Connected web/research tool",permission:"none",executionRule:"Use connected sources when current or externally verifiable information is required; distinguish evidence from inference."},
  create:{id:"create",label:"Creation",requirement:"Connected artifact-generation tool",permission:"none",executionRule:"Create only through a connected artifact tool and never claim an artifact exists before generation succeeds."},
