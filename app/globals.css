@@ -1915,7 +1915,8 @@ h1 {
   .topbar-title span:last-child { display: none; }
   .command-capability-grid { grid-template-columns: repeat(3,minmax(0,1fr)); }
 }
-@media (max-width: 760px) {
+/* Phone/tablet fallback: some mobile browsers expose a wide layout viewport before the viewport meta is applied. Keep NOVA mobile-safe at <= 980px CSS width. */
+@media (max-width: 980px) {
   .nova-command-center {
     display: block;
     height: 100dvh;
