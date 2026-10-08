@@ -8,7 +8,8 @@ export type NovaGatewayPlan={intent:NovaIntent;model:string;fallbackModels:strin
 type Msg={role:"user"|"assistant"|"system";content:any};
 const textOf=(content:any)=>typeof content==="string"?content:Array.isArray(content)?content.filter((p:any)=>p?.type==="text").map((p:any)=>p.text||"").join(""):"";
 
-const WEB=/\b(latest|today|current|recent|news|price|weather|forecast|score|schedule|release|search|research|look up|lookup|compare|website|online|internet|source|sources|what happened)\b/i;\nconst DATE_TIME=/\b(what(?:\s+is|\x27s)?\s+(?:today(?:\x27s)?\s+)?(?:date|day|time)|today(?:\x27s)?\s+date|current\s+(?:date|time)|what\s+day\s+is\s+it|what\s+time\s+is\s+it|time\s+now|date\s+today)\b/i;
+const WEB=/\b(latest|today|current|recent|news|price|weather|forecast|score|schedule|release|search|research|look up|lookup|compare|website|online|internet|source|sources|what happened)\b/i;
+const DATE_TIME=/\b(what(?:\s+is|\x27s)?\s+(?:today(?:\x27s)?\s+)?(?:date|day|time)|today(?:\x27s)?\s+date|current\s+(?:date|time)|what\s+day\s+is\s+it|what\s+time\s+is\s+it|time\s+now|date\s+today)\b/i;
 const DEEP=/\b(deep research|deep dive|comprehensive research|thorough research|investigate|literature review|compare in depth)\b/i;
 const BUILD=/\b(code|coding|program|debug|bug|typescript|javascript|python|react|next\.js|api|backend|frontend|repository|repo|github|vercel|build an app|write code)\b/i;
 const ANALYZE=/\b(analy[sz]e|analysis|calculate|calculation|data|dataset|csv|xlsx|spreadsheet|metrics|kpi|trend|forecast|statistics)\b/i;
