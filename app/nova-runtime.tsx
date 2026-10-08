@@ -234,7 +234,6 @@ const adapter: ChatModelAdapter = {
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let fullText = "";
-    let emittedLength = 0;
 
     while (true) {
       const { done, value } = await reader.read();
@@ -244,7 +243,7 @@ const adapter: ChatModelAdapter = {
 
       const markerIndex = fullText.indexOf(USAGE_MARKER);
       if (markerIndex >= 0) {
-        const visibleText = fullText.slice(emittedLength, markerIndex);
+        const visibleText = fullText.slice(0, markerIndex);
         const usageText = fullText.slice(markerIndex + USAGE_MARKER.length).trim();
         try {
           recordUsage(JSON.parse(usageText) as UsagePayload);
@@ -257,10 +256,8 @@ const adapter: ChatModelAdapter = {
         return;
       }
 
-      const visibleText = fullText.slice(emittedLength);
-      if (visibleText) {
-        emittedLength = fullText.length;
-        yield { content: [{ type: "text", text: visibleText }] };
+      if (fullText) {
+        yield { content: [{ type: "text", text: fullText }] };
       }
     }
 
@@ -268,7 +265,7 @@ const adapter: ChatModelAdapter = {
 
     const markerIndex = fullText.indexOf(USAGE_MARKER);
     if (markerIndex >= 0) {
-      const visibleText = fullText.slice(emittedLength, markerIndex);
+      const visibleText = fullText.slice(0, markerIndex);
       const usageText = fullText.slice(markerIndex + USAGE_MARKER.length).trim();
       try {
         recordUsage(JSON.parse(usageText) as UsagePayload);
@@ -278,11 +275,8 @@ const adapter: ChatModelAdapter = {
       if (visibleText) {
         yield { content: [{ type: "text", text: visibleText }] };
       }
-    } else {
-      const visibleText = fullText.slice(emittedLength);
-      if (visibleText) {
-        yield { content: [{ type: "text", text: visibleText }] };
-      }
+    } else if (fullText) {
+      yield { content: [{ type: "text", text: fullText }] };
     }
   },
 };

@@ -1,5 +1,7 @@
 import {buildNovaSystem,createNovaPlan,prepareNovaMessages} from "./nova-gateway";
 import {requestNovaIntelligence} from "./intelligence-gateway";
+import {executeNovaCapability} from "./nova-capability-runtime";
+import {selectNovaCapabilities} from "./nova-capability";
 export const runtime="nodejs"; export const dynamic="force-dynamic";
 type Msg={role:"user"|"assistant"|"system";content:any};
 function textOf(content:any){return typeof content==="string"?content:Array.isArray(content)?content.filter((p:any)=>p?.type==="text").map((p:any)=>p.text||"").join(""):""} type Usage={prompt_tokens?:number;completion_tokens?:number;total_tokens?:number;cost?:number};
@@ -14,6 +16,16 @@ export async function POST(req:Request){
   let localTime="";
   try{const now=new Date();const formatted=new Intl.DateTimeFormat("en-IN",{timeZone:timezone,dateStyle:"full",timeStyle:"long"}).format(now);localTime=`The user's local date and time is ${formatted} (${timezone}). Use this for date/time questions.`}catch{localTime="The user's local date and time could not be resolved; do not guess it."}
   const plan=createNovaPlan(valid),messages=prepareNovaMessages(valid,plan.contextMessages),objective=textOf(messages.filter(m=>m.role==="user").at(-1)?.content);
+  const capability=selectNovaCapabilities(objective,plan.intent);
+  if(capability.primary==="time"){
+    const result=await executeNovaCapability("time.now",{objective,input:timezone});
+    if(result.ok&&result.verified){
+      const local=String((result.output as {local?:string})?.local||"");
+      const text=local?("Today is "+local.split(" at ")[0]+"."):"NOVA could not resolve the requested date/time.";
+      return new Response(text,{headers:{"Content-Type":"text/plain; charset=utf-8","Cache-Control":"no-cache, no-transform","X-NOVA-Intent":plan.intent,"X-NOVA-Provider":"native-time","X-NOVA-Shield":plan.shield.risk,"X-NOVA-Runtime":"enabled"}});
+    }
+    return new Response("NOVA could not resolve the requested date or time for this timezone.",{headers:{"Content-Type":"text/plain; charset=utf-8","Cache-Control":"no-cache, no-transform","X-NOVA-Intent":plan.intent,"X-NOVA-Provider":"native-time","X-NOVA-Shield":plan.shield.risk,"X-NOVA-Runtime":"enabled"}});
+  }
   const attempt=await requestNovaIntelligence(plan,{messages:[{role:"system",content:buildNovaSystem(plan,objective)+"\n"+localTime},...messages],stream:true,...(plan.useWeb?{tools:[{type:"openrouter:web_search"}],tool_choice:"auto",max_tool_calls:plan.deepResearch?6:2}: {})});
   if(!attempt)return new Response("NOVA has no configured intelligence provider. Add at least one direct provider key (Gemini, Mistral or Groq), or configure NOVA_GATEWAY_* as a fallback.",{status:503});
   if(!attempt.response.ok||!attempt.response.body){const d=await attempt.response.text().catch(()=>"");return new Response(failure(attempt.response.status,d,attempt.label),{status:200})}
