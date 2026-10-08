@@ -783,10 +783,10 @@ function NovaRightRail({ isRunning, messageCount, onPrompt }: { isRunning:boolea
     <section className="status-card"><div className="status-card-head"><strong>Today's Activity</strong><button type="button">View all</button></div>
       <div className="activity-list"><div><span>✓</span><p><strong>{messageCount}</strong> messages in this workspace</p></div><div><span>◌</span><p>Adaptive reasoning is ready</p></div><div><span>◇</span><p>Memory context is available</p></div><div><span>⌁</span><p>{isRunning?"NOVA is working now":"No active task"}</p></div></div>
     </section>
-    <section className="status-card quick-card"><div className="status-card-head"><strong>Quick Start</strong></div>
-      <button type="button" onClick={()=>onPrompt("Research this topic deeply and give me a verified answer with sources.")}>Deep Research <span>→</span></button>
-      <button type="button" onClick={()=>onPrompt("Analyze this carefully and give me the important findings and next steps.")}>Analyze <span>→</span></button>
-      <button type="button" onClick={()=>onPrompt("Help me build this step by step and validate the implementation.")}>Build <span>→</span></button>
+    <section className="status-card context-card"><div className="status-card-head"><strong>Active Context</strong><span>READY</span></div>
+      <div className="context-row"><span>Workspace</span><strong>Personal</strong></div>
+      <div className="context-row"><span>Memory</span><strong>Available</strong></div>
+      <div className="context-row"><span>Tools</span><strong>Connected</strong></div>
     </section>
     <section className="insight-card"><span className="insight-icon">✦</span><strong>NOVA Intelligence</strong><p>One conversation surface over models, memory, tools, planning and verification.</p></section>
   </aside>;
@@ -957,11 +957,11 @@ function Home() {
       <section className="nova-main-column">
         <header className="topbar nova-command-topbar">
           <div className="topbar-title"><span className="topbar-nova-dot" /><strong>NOVA</strong><span>Your Personal AI System</span></div>
-          <nav className="command-tabs">{[["Chat",""],["Create","Create something for me."],["Research","Research this deeply and verify the important claims."],["Analyze","Analyze this carefully and show the important findings."],["Build","Help me build this step by step."],["Plan","Help me plan this with dependencies and next steps."]].map(([label,value])=><button type="button" key={label} className={label==="Chat"?"selected":""} onClick={()=>value&&prompt(value)}>{label}</button>)}<button type="button" className="command-more" onClick={()=>setMenuOpen(o=>!o)}>More⌄</button></nav>
+          <div className="command-center-status"><span className="status-live-dot" /> <strong>COMMAND CENTER</strong><span>Ready</span></div>
           <div className="topbar-actions"><button type="button" className="quiet-button" aria-label="Search">⌕</button><button type="button" className="quiet-button" aria-label="Notifications">♧</button><button type="button" className="top-avatar" onClick={()=>{setSettingsOpen(true);setSettingsSection("General");}}>S</button></div>
         </header>
         <div className="command-workspace">
-          <AuiIf condition={state=>state.thread.isEmpty}><div className="hero-copy command-hero"><span className="eyebrow">INTELLIGENCE, CONNECTED</span><h1>What would you like<br />to accomplish today?</h1><p>Ask anything. Give NOVA a task. Let the system figure out what is required.</p></div></AuiIf>
+          <AuiIf condition={state=>state.thread.isEmpty}><div className="hero-copy command-hero"><span className="eyebrow">NOVA COMMAND CENTER</span><h1>What should NOVA<br />move forward today?</h1><p>One workspace for research, creation, analysis and building. Give NOVA the objective, and it will choose the path.</p></div></AuiIf>
           <ThreadPrimitive.Root className="thread">
             <ThreadPrimitive.Viewport className="thread-viewport" turnAnchor="top" scrollToBottomOnRunStart><ThreadPrimitive.Messages>{()=> <Message />}</ThreadPrimitive.Messages></ThreadPrimitive.Viewport>
             <ThreadPrimitive.ViewportFooter className="thread-footer">
@@ -985,7 +985,15 @@ function Home() {
               </ComposerPrimitive.Root>
             </ThreadPrimitive.ViewportFooter>
           </ThreadPrimitive.Root>
-          {isEmpty&&<div className="command-capability-grid">{[["◉","Deep Research","Research anything with verified sources.","Research this topic deeply."],["✦","Create","Generate high-quality content and ideas.","Help me create this from scratch."],["▥","Analyze","Understand data and complex information.","Analyze this carefully."],["⌘","Build","Create apps, code and workflows.","Help me build this step by step."],["□","Plan","Turn goals into actionable plans.","Help me plan this."],["↻","Automate","Turn repeatable work into systems.","What could NOVA automate for me?"]].map(([icon,title,desc,value])=><button type="button" key={title} className="command-capability-card" onClick={()=>prompt(value)}><span className="capability-icon">{icon}</span><strong>{title}</strong><small>{desc}</small></button>)}</div>}
+          {isEmpty&&<div className="command-capability-grid">{["Research","Create","Analyze","Build"].map((title) => {
+            const config = {
+              Research: ["◉","Deep Research","Verified research, sources and current information.","Research this topic deeply."],
+              Create: ["✦","Create","Content, ideas and polished deliverables.","Help me create this from scratch."],
+              Analyze: ["▥","Analyze","Data, documents, decisions and complex information.","Analyze this carefully."],
+              Build: ["⌘","Build","Apps, code, workflows and working systems.","Help me build this step by step."],
+            }[title]!;
+            return <button type="button" key={title} className="command-capability-card" onClick={()=>prompt(config[3])}><span className="capability-icon">{config[0]}</span><strong>{config[1]}</strong><small>{config[2]}</small></button>;
+          })}</div>}
           {!isEmpty&&<section className="nova-current-task"><div className="task-head"><div><span className="task-kicker">CURRENT WORKSPACE</span><h2>{isRunning?"NOVA is working on your request":"Conversation workspace"}</h2></div><span className={isRunning?"task-status working":"task-status"}>{isRunning?"Working":"Ready"}</span></div><div className="task-progress"><span className={isRunning?"progress-fill working":"progress-fill"} /></div><div className="task-steps"><span className="done">✓ Understand</span><span className={isRunning?"active":"done"}>{isRunning?"● Execute":"✓ Plan"}</span><span>○ Verify</span><span>○ Complete</span></div></section>}
           {isRunning&&<div className="run-status"><span /> NOVA is working</div>}
         </div>
