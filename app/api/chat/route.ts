@@ -9,9 +9,12 @@ function sanitize(x:unknown):Msg[]{if(!Array.isArray(x))return[];return x.filter
 function failure(s:number,d:string,label:string){const k=s===401?"authentication was rejected":s===402?"wallet balance or budget is insufficient":s===403?"the request was forbidden":s===404?"the model is unavailable":s===429?"the provider rate-limited the request":s>=500?"the provider returned a server error":"the provider rejected the request";return"NOVA intelligence connection failed at "+label+": "+k+"."+(d?" Detail: "+detail(d):"")}
 export async function POST(req:Request){
  try{
-  const body=await req.json() as {messages?:unknown}, valid=sanitize(body.messages); if(!valid.length)return new Response("NOVA needs a message to begin.",{status:400});
+  const body=await req.json() as {messages?:unknown;timezone?:unknown}, valid=sanitize(body.messages); if(!valid.length)return new Response("NOVA needs a message to begin.",{status:400});
+  const timezone=typeof body.timezone==="string"&&body.timezone.length<=80?body.timezone:"UTC";
+  let localTime="";
+  try{const now=new Date();const formatted=new Intl.DateTimeFormat("en-IN",{timeZone:timezone,dateStyle:"full",timeStyle:"long"}).format(now);localTime=`The user's local date and time is ${formatted} (${timezone}). Use this for date/time questions.`}catch{localTime="The user's local date and time could not be resolved; do not guess it."}
   const plan=createNovaPlan(valid),messages=prepareNovaMessages(valid,plan.contextMessages),objective=textOf(messages.filter(m=>m.role==="user").at(-1)?.content);
-  const attempt=await requestNovaIntelligence(plan,{messages:[{role:"system",content:buildNovaSystem(plan,objective)},...messages],stream:true,...(plan.useWeb?{tools:[{type:"openrouter:web_search"}],tool_choice:"auto",max_tool_calls:plan.deepResearch?6:2}: {})});
+  const attempt=await requestNovaIntelligence(plan,{messages:[{role:"system",content:buildNovaSystem(plan,objective)+"\n"+localTime},...messages],stream:true,...(plan.useWeb?{tools:[{type:"openrouter:web_search"}],tool_choice:"auto",max_tool_calls:plan.deepResearch?6:2}: {})});
   if(!attempt)return new Response("NOVA has no configured intelligence provider. Add at least one direct provider key (Gemini, Mistral or Groq), or configure NOVA_GATEWAY_* as a fallback.",{status:503});
   if(!attempt.response.ok||!attempt.response.body){const d=await attempt.response.text().catch(()=>"");return new Response(failure(attempt.response.status,d,attempt.label),{status:200})}
   const contentType=attempt.response.headers.get("content-type")||"";

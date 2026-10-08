@@ -210,7 +210,10 @@ const adapter: ChatModelAdapter = {
     const response = await fetch("/api/chat", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ messages: outgoingMessages }),
+      body: JSON.stringify({
+        messages: outgoingMessages,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      }),
       signal: abortSignal,
     }).catch((error) => new Response(
       `NOVA could not reach its intelligence service. ${error instanceof Error ? error.message : "Network request failed."}`,
