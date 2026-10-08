@@ -8,7 +8,7 @@ export type NovaGatewayPlan={intent:NovaIntent;model:string;fallbackModels:strin
 type Msg={role:"user"|"assistant"|"system";content:any};
 const textOf=(content:any)=>typeof content==="string"?content:Array.isArray(content)?content.filter((p:any)=>p?.type==="text").map((p:any)=>p.text||"").join(""):"";
 
-const WEB=/\b(latest|today|current|recent|news|price|weather|forecast|score|schedule|release|search|research|look up|lookup|compare|website|online|internet|source|sources|what happened)\b/i;
+const WEB=/\b(latest|today|current|recent|news|price|weather|forecast|score|schedule|release|search|research|look up|lookup|compare|website|online|internet|source|sources|what happened)\b/i;\nconst DATE_TIME=/\b(what(?:\s+is|\x27s)?\s+(?:today(?:\x27s)?\s+)?(?:date|day|time)|today(?:\x27s)?\s+date|current\s+(?:date|time)|what\s+day\s+is\s+it|what\s+time\s+is\s+it|time\s+now|date\s+today)\b/i;
 const DEEP=/\b(deep research|deep dive|comprehensive research|thorough research|investigate|literature review|compare in depth)\b/i;
 const BUILD=/\b(code|coding|program|debug|bug|typescript|javascript|python|react|next\.js|api|backend|frontend|repository|repo|github|vercel|build an app|write code)\b/i;
 const ANALYZE=/\b(analy[sz]e|analysis|calculate|calculation|data|dataset|csv|xlsx|spreadsheet|metrics|kpi|trend|forecast|statistics)\b/i;
@@ -28,7 +28,7 @@ export function createNovaPlan(m:Msg[]):NovaGatewayPlan{
  const t=latest(m),intent=classifyNovaIntent(m),deepResearch=DEEP.test(t);
  const model=env("NOVA_GATEWAY_MODEL_"+intent.toUpperCase())||env("NOVA_GATEWAY_MODEL")||(env("OPENROUTER_API_KEY")?env("OPENROUTER_MODEL")||"openrouter/free":"");
  return {intent,model,fallbackModels:list("NOVA_GATEWAY_FALLBACK_MODELS").filter(x=>x!==model),
- useWeb:deepResearch||intent==="research"||WEB.test(t),deepResearch,contextMessages:deepResearch?32:20,shield:assessNovaInput(t)};
+ useWeb:!DATE_TIME.test(t)&&(deepResearch||intent==="research"||WEB.test(t)),deepResearch,contextMessages:deepResearch?32:20,shield:assessNovaInput(t)};
 }
 export function prepareNovaMessages(m:Msg[],n:number){return m.filter(x=>x&&x.content&&["user","assistant","system"].includes(x.role)).slice(-n).map(x=>({...x,content:typeof x.content==="string"?x.content.trim().slice(0,16000):x.content})).filter(x=>x.content.length>0);}
 export function buildNovaSystem(plan:NovaGatewayPlan, objectiveText?:string){
