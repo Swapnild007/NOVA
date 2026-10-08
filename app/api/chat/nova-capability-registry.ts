@@ -14,6 +14,10 @@ export type NovaCapabilityRegistryEntry = {
 };
 
 const metadata: Record<NovaCapability, Omit<NovaCapabilityRegistryEntry, "status" | "tool">> = {
+  time: {
+    id: "time", label: "Date & Time", requirement: "NOVA local clock and valid IANA timezone", permission: "none",
+    executionRule: "Resolve date/time locally for the supplied timezone; never guess when timezone resolution fails.",
+  },
   reason: {
     id: "reason", label: "Reasoning", requirement: "NOVA core inference", permission: "none",
     executionRule: "Reason using the connected intelligence provider; never invent unavailable execution.",
