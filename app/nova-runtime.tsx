@@ -100,8 +100,11 @@ function recordUsage(payload: UsagePayload) {
           promptTokens: number;
           completionTokens: number;
           cost: number;
+          providerRequests?: number;
+          estimatedRequests?: number;
+          usageSource?: "provider" | "estimated" | "mixed";
         }
-      : { requests: 0, promptTokens: 0, completionTokens: 0, cost: 0 };
+      : { requests: 0, promptTokens: 0, completionTokens: 0, cost: 0, providerRequests: 0, estimatedRequests: 0, usageSource: "estimated" };
 
     current.requests += 1;
     current.promptTokens += Number(payload.prompt_tokens || 0);
