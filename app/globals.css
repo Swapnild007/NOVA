@@ -1932,7 +1932,7 @@ h1 {
   .nova-command-center::after { display: none; }
   .nova-side-rail { display: none; }
   .nova-main-column { height: 100dvh; padding-top: 58px; }
-  .nova-command-topbar {
+  .nova-command-center .nova-command-topbar {
     position: fixed;
     inset: 0 0 auto 0;
     width: 100%;
