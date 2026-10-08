@@ -51,10 +51,7 @@
 
 html, body {
   margin: 0;
-  width: 100%;
-  height: 100%;
   min-height: 100%;
-  overflow: hidden;
   background: var(--bg);
   color: var(--ink);
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", Inter, system-ui, sans-serif;
@@ -1720,31 +1717,6 @@ h1 {
   backdrop-filter: blur(20px);
 }
 .topbar-title { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
-.command-center-status {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%,-50%);
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  min-height: 27px;
-  padding: 0 11px;
-  border: 1px solid rgba(170,180,220,.11);
-  border-radius: 999px;
-  background: rgba(255,255,255,.035);
-  color: #8f97ad;
-  font-size: 9px;
-  letter-spacing: .06em;
-}
-.command-center-status strong { color: #c9cdef; font-size: 8px; letter-spacing: .14em; }
-.status-live-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #55d7aa;
-  box-shadow: 0 0 10px rgba(85,215,170,.8);
-}
 .topbar-title strong { color: #f3f5ff; font-size: 15px; letter-spacing: .08em; }
 .topbar-title span:last-child { color: #777f98; font-size: 10px; }
 .topbar-nova-dot { width: 7px; height: 7px; border-radius: 50%; background: #7469ff; box-shadow: 0 0 13px #7469ff; }
@@ -1825,10 +1797,10 @@ h1 {
   font-size: 10px;
 }
 .composer-mode-pill:hover { color: #f2f4ff; background: rgba(255,255,255,.06); }
-.command-capability-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; margin: 22px 0 0; }
+.command-capability-grid { display: grid; grid-template-columns: repeat(6,minmax(0,1fr)); gap: 10px; margin: 25px 0 0; }
 .command-capability-card {
   min-width: 0;
-  min-height: 116px;
+  min-height: 128px;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -1914,17 +1886,6 @@ h1 {
 .quick-card button { width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 9px 8px; margin-top: 3px; border: 0; border-radius: 9px; background: transparent; color: #9098ae; text-align: left; cursor: pointer; font-size: 9px; }
 .quick-card button:hover { background: rgba(255,255,255,.045); color: #eef0fb; }
 .quick-card button span { color: #9387ff; }
-.context-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  min-height: 32px;
-  border-top: 1px solid rgba(170,180,220,.08);
-  color: #737b95;
-  font-size: 9px;
-}
-.context-row strong { color: #dce0f2; font-size: 9px; font-weight: 600; }
 .insight-card { background: linear-gradient(145deg, rgba(115,101,255,.14), rgba(12,15,29,.72)); }
 .insight-icon { display: block; margin-bottom: 9px; color: #aa9fff; font-size: 18px; }
 .insight-card strong { color: #f0f2ff; font-size: 11px; }
@@ -1954,104 +1915,25 @@ h1 {
   .topbar-title span:last-child { display: none; }
   .command-capability-grid { grid-template-columns: repeat(3,minmax(0,1fr)); }
 }
-/* Phone/tablet fallback: some mobile browsers expose a wide layout viewport before the viewport meta is applied. Keep NOVA mobile-safe at <= 980px CSS width. */
-@media (max-width: 980px) {
+@media (max-width: 760px) {
   .nova-command-center {
-    position: fixed;
-    inset: 0;
     display: block;
-    width: 100%;
     height: 100dvh;
     min-height: 100dvh;
     overflow: hidden;
   }
   .nova-command-center::after { display: none; }
   .nova-side-rail { display: none; }
-  .nova-main-column { height: 100dvh; padding-top: 58px; }
-  .nova-command-center .nova-command-topbar {
-    position: fixed;
-    inset: 0 0 auto 0;
-    width: 100%;
-    height: 58px;
-    flex: 0 0 58px;
-    padding: 0 10px;
-  }
+  .nova-main-column { height: 100dvh; }
+  .nova-command-topbar { height: 58px; flex-basis: 58px; padding: 0 10px; }
   .command-tabs { display: none; }
   .topbar-title { margin-right: auto; }
-  .command-workspace {
-    width: calc(100% - 20px);
-    max-width: none;
-    padding-top: 18px;
-  }
+  .command-workspace { width: min(100% - 20px, 720px); padding-top: 18px; }
   .command-hero { margin-top: auto; }
   .command-hero h1 { font-size: 34px; }
   .command-hero p { font-size: 12px; }
-  .nova-command-center.is-empty .thread {
-    flex: 0 0 auto;
-  }
-  .nova-command-center.is-empty .thread-viewport {
-    height: 0;
-    max-height: 0;
-    padding: 0;
-  }
-  .command-capability-grid {
-    grid-template-columns: repeat(2,minmax(0,1fr));
-    gap: 8px;
-    margin-top: 16px;
-  }
+  .command-capability-grid { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; margin-top: 16px; }
   .command-capability-card { min-height: 106px; padding: 12px; }
-  .command-center-status { display: none; }
   .nova-command-center .footer { display: none; }
   .composer-mode-pill { display: none; }
-}
-
-/* Android desktop-mode fallback: Chrome can expose a 980px virtual viewport on a phone
-   and scale the page down to fit the physical screen. Keep the mobile composition
-   fluid at that width instead of constraining it to a narrow 720px canvas. */
-@media (min-width: 761px) and (max-width: 1100px) {
-  body.nova-virtual-mobile .nova-command-center {
-    width: calc(100% / var(--nova-virtual-scale));
-    height: calc(100dvh / var(--nova-virtual-scale));
-    zoom: var(--nova-virtual-scale);
-  }
-
-  .nova-command-center .nova-command-topbar {
-    height: 76px;
-    flex-basis: 76px;
-    padding-inline: 20px;
-  }
-
-  .nova-main-column {
-    padding-top: 76px;
-  }
-
-  .command-workspace {
-    width: calc(100% - 28px);
-  }
-
-  .command-hero h1 {
-    font-size: 48px;
-  }
-
-  .command-hero p {
-    font-size: 15px;
-  }
-
-  .command-capability-grid {
-    gap: 10px;
-    margin-top: 20px;
-  }
-
-  .command-capability-card {
-    min-height: 120px;
-    padding: 15px;
-  }
-
-  .command-capability-card strong {
-    font-size: 14px;
-  }
-
-  .command-capability-card small {
-    font-size: 10px;
-  }
 }
