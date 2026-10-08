@@ -18,8 +18,10 @@ export function sanitizeNovaMemory(input: unknown): NovaMemoryItem[] {
   if (!Array.isArray(input)) return [];
   return input
     .filter((item): item is Partial<NovaMemoryItem> => !!item && typeof item === "object")
-    .map((item) => ({
-      id: typeof item.id === "string" ? item.id.slice(0, 80) : "",
+    .map((item): NovaMemoryItem => ({
+      id: typeof item.id === "string" && item.id.trim()
+        ? item.id.slice(0, 80)
+        : "mem-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 7),
       category: item.category as NovaMemoryCategory,
       key: typeof item.key === "string" ? item.key.trim().slice(0, 120) : "",
       value: typeof item.value === "string" ? item.value.trim().slice(0, 500) : "",
