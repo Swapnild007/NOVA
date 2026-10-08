@@ -27,7 +27,9 @@ export type CapabilityDecision = {
 type Signal = { capability: NovaCapability; weight: number; reason: string };
 
 const rules: Array<{ pattern: RegExp; signals: Signal[] }> = [
-  { pattern: /\b(what(?:\s+is|\x27s)?\s+(?:today(?:\x27s)?\s+)?(?:date|day|time)|today(?:\x27s)?\s+date|current\s+(?:date|time)|what\s+day\s+is\s+it|what\s+time\s+is\s+it|time\s+now|date\s+today)\b/i,\n    signals: [{ capability: "time", weight: 10, reason: "native date or time requested" }] },\n  { pattern: /\b(latest|current|recent|news|search|research|source|sources|website|online|internet|look up)\b/i,
+  { pattern: /\b(what(?:\s+is|\x27s)?\s+(?:today(?:\x27s)?\s+)?(?:date|day|time)|today(?:\x27s)?\s+date|current\s+(?:date|time)|what\s+day\s+is\s+it|what\s+time\s+is\s+it|time\s+now|date\s+today)\b/i,
+    signals: [{ capability: "time", weight: 10, reason: "native date or time requested" }] },
+  { pattern: /\b(latest|current|recent|news|search|research|source|sources|website|online|internet|look up)\b/i,
     signals: [{ capability: "research", weight: 6, reason: "current or external information requested" }] },
   { pattern: /\b(file|pdf|document|xlsx|csv|spreadsheet|attachment|upload|folder|read this)\b/i,
     signals: [{ capability: "files", weight: 6, reason: "file or document capability requested" }] },
@@ -105,5 +107,6 @@ export function buildCapabilityInstruction(decision: CapabilityDecision) {
     "Selection rationale: " + decision.rationale.join("; "),
     "Use only capabilities actually connected to this runtime.",
     "If a capability is unavailable, do not simulate its result.",
-  ].join("\n");
+  ].join("
+");
 }
