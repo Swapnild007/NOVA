@@ -799,7 +799,6 @@ function Home() {
   const isRunning = useAuiState((state) => state.thread.isRunning);
   const messages = useAuiState((state) => state.thread.messages);
   const [intro, setIntro] = useState(true);
-  const [menuOpen, setMenuOpen] = useState(false);
   const [composerMenuOpen, setComposerMenuOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsSection, setSettingsSection] = useState<SettingsSection>("General");
@@ -808,7 +807,6 @@ function Home() {
   const [activeChat, setActiveChat] = useState("");
   const [chatHistory, setChatHistory] = useState<PersistedChat[]>([]);
   const skipHistoryPersist = useRef(false);
-  const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const id = activeChatId() || newChatId();
@@ -836,15 +834,6 @@ function Home() {
     const stored = (localStorage.getItem("nova-theme") as Theme) || "system";
     document.documentElement.dataset.theme = stored;
   }, []);
-
-  useEffect(() => {
-    if (!menuOpen) return;
-    const close = (event: MouseEvent) => {
-      if (!menuRef.current?.contains(event.target as Node)) setMenuOpen(false);
-    };
-    document.addEventListener("mousedown", close);
-    return () => document.removeEventListener("mousedown", close);
-  }, [menuOpen]);
 
   const switchChat = (id: string) => {
     if (id === activeChat) {
