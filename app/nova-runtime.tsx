@@ -234,6 +234,14 @@ const adapter: ChatModelAdapter = {
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let fullText = "";
+    const promptText = outgoingMessages
+      .map((message) => typeof message.content === "string"
+        ? message.content
+        : Array.isArray(message.content)
+          ? message.content.filter((part: any) => part?.type === "text").map((part: any) => part.text || "").join("")
+          : "")
+      .join("\n");
+    const estimatedPromptTokens = Math.max(1, Math.ceil(promptText.length / 4));
 
     while (true) {
       const { done, value } = await reader.read();
@@ -276,7 +284,20 @@ const adapter: ChatModelAdapter = {
         yield { content: [{ type: "text", text: visibleText }] };
       }
     } else if (fullText) {
+      recordUsage({
+        prompt_tokens: estimatedPromptTokens,
+        completion_tokens: Math.max(1, Math.ceil(fullText.length / 4)),
+        total_tokens: estimatedPromptTokens + Math.max(1, Math.ceil(fullText.length / 4)),
+        cost: 0,
+      });
       yield { content: [{ type: "text", text: fullText }] };
+    } else {
+      recordUsage({
+        prompt_tokens: estimatedPromptTokens,
+        completion_tokens: 1,
+        total_tokens: estimatedPromptTokens + 1,
+        cost: 0,
+      });
     }
   },
 };
