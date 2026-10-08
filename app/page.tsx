@@ -892,7 +892,7 @@ function Home() {
 
   const setComposerValue = (value: string) => {
     aui.composer.setText(value);
-    setMenuOpen(false);
+    setComposerMenuOpen(false);
   };
 
   const chooseAttachment = () => {
