@@ -2009,6 +2009,12 @@ h1 {
    and scale the page down to fit the physical screen. Keep the mobile composition
    fluid at that width instead of constraining it to a narrow 720px canvas. */
 @media (min-width: 761px) and (max-width: 1100px) {
+  body.nova-virtual-mobile .nova-command-center {
+    width: calc(100% / var(--nova-virtual-scale));
+    height: calc(100dvh / var(--nova-virtual-scale));
+    zoom: var(--nova-virtual-scale);
+  }
+
   .nova-command-center .nova-command-topbar {
     height: 76px;
     flex-basis: 76px;
