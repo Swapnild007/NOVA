@@ -12,7 +12,7 @@ export type NovaMemoryItem = {
   expiresAt?: string;
 };
 
-const SECRET = /(?:sk-|api[_-]?key|password|passwd|token|secret|authorization|bearer)\\s*[:=]?/i;
+const SECRET = /(?:sk-|api[_-]?key|password|passwd|token|secret|authorization|bearer)\s*[:=]?/i;
 
 export function sanitizeNovaMemory(input: unknown): NovaMemoryItem[] {
   if (!Array.isArray(input)) return [];
