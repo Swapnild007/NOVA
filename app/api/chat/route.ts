@@ -3,6 +3,7 @@ import {requestNovaIntelligence} from "./intelligence-gateway";
 import {createNovaExecutionPlan} from "./nova-capability-runtime";
 import {runNovaCapability} from "./nova-execution-runner";
 import {selectNovaCapabilities} from "./nova-capability";
+import {sanitizeNovaMemory} from "./nova-memory";
 export const runtime="nodejs"; export const dynamic="force-dynamic";
 type Msg={role:"user"|"assistant"|"system";content:any};
 function textOf(content:any){return typeof content==="string"?content:Array.isArray(content)?content.filter((p:any)=>p?.type==="text").map((p:any)=>p.text||"").join(""):""} type Usage={prompt_tokens?:number;completion_tokens?:number;total_tokens?:number;cost?:number};
@@ -12,11 +13,11 @@ function sanitize(x:unknown):Msg[]{if(!Array.isArray(x))return[];return x.filter
 function failure(s:number,d:string,label:string){const k=s===401?"authentication was rejected":s===402?"wallet balance or budget is insufficient":s===403?"the request was forbidden":s===404?"the model is unavailable":s===429?"the provider rate-limited the request":s>=500?"the provider returned a server error":"the provider rejected the request";return"NOVA intelligence connection failed at "+label+": "+k+"."+(d?" Detail: "+detail(d):"")}
 export async function POST(req:Request){
  try{
-  const body=await req.json() as {messages?:unknown;timezone?:unknown}, valid=sanitize(body.messages); if(!valid.length)return new Response("NOVA needs a message to begin.",{status:400});
+  const body=await req.json() as {messages?:unknown;timezone?:unknown;memory?:unknown}, valid=sanitize(body.messages); if(!valid.length)return new Response("NOVA needs a message to begin.",{status:400});
   const timezone=typeof body.timezone==="string"&&body.timezone.length<=80?body.timezone:"UTC";
   let localTime="";
   try{const now=new Date();const formatted=new Intl.DateTimeFormat("en-IN",{timeZone:timezone,dateStyle:"full",timeStyle:"long"}).format(now);localTime=`The user's local date and time is ${formatted} (${timezone}). Use this for date/time questions.`}catch{localTime="The user's local date and time could not be resolved; do not guess it."}
-  const plan=createNovaPlan(valid),messages=prepareNovaMessages(valid,plan.contextMessages),objective=textOf(messages.filter(m=>m.role==="user").at(-1)?.content);
+  const memory=sanitizeNovaMemory(body.memory),plan=createNovaPlan(valid),messages=prepareNovaMessages(valid,plan.contextMessages),objective=textOf(messages.filter(m=>m.role==="user").at(-1)?.content);
   const capability=selectNovaCapabilities(objective,plan.intent);
   if(capability.primary==="weather"){
     const locationMatch=objective.match(/\\b(?:weather|forecast|temperature|rain|raining|humidity|wind|storm|sunny|cloudy)\\s+(?:in|for|at)\\s+(.+?)(?:[?.!]?$)/i);
