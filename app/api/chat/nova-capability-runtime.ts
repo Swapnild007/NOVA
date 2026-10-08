@@ -20,6 +20,9 @@ const unsupported=(name:string,capability:NovaCapability,description:string,requ
 });
 
 const localTools:NovaTool[]=[
+ {name:"time.now",capability:"time",description:"Resolve the current date and time for an explicit IANA timezone.",risk:"compute",requiresPermission:false,requiresExternalTool:false,
+  execute:({input})=>{const timezone=typeof input==="string"&&input.trim()?input.trim():"UTC";try{const now=new Date();const formatted=new Intl.DateTimeFormat("en-IN",{timeZone:timezone,dateStyle:"full",timeStyle:"long"}).format(now);return{ok:true,tool:"time.now",capability:"time",output:{timezone,iso:now.toISOString(),local:formatted},verified:true};}catch{return{ok:false,tool:"time.now",capability:"time",error:"Invalid timezone.",verified:false};}}},
+
  {name:"security.inspect",capability:"security",description:"Inspect text for prompt-injection and exposed-secret patterns.",risk:"compute",requiresPermission:false,requiresExternalTool:false,
   execute:({objective})=>{const checks=[{name:"prompt-injection",pattern:/ignore (all|any|previous|prior) instructions|reveal (the )?(system|developer|hidden) prompt|disable (security|safety|guardrails)/i},{name:"secret-like-token",pattern:/(?:sk-|ci_live_|ghp_|xox[baprs]-)[A-Za-z0-9_-]{12,}/i}];const findings=checks.filter(c=>c.pattern.test(objective)).map(c=>c.name);return{ok:true,tool:"security.inspect",capability:"security",output:{safe:findings.length===0,findings},verified:true};}},
  {name:"verify.result",capability:"verify",description:"Verify a capability result is explicit and does not claim unavailable execution.",risk:"compute",requiresPermission:false,requiresExternalTool:false,
@@ -35,7 +38,7 @@ const localTools:NovaTool[]=[
  unsupported("act.external","act","Perform an external side effect.",true)
 ];
 const registry=new Map(localTools.map(t=>[t.name,t]));
-const preferredTool:Partial<Record<NovaCapability,string>>={research:"research.search",files:"files.inspect",vision:"vision.inspect",voice:"voice.process",memory:"memory.retrieve",build:"build.project",analyze:"analyze.data",create:"create.artifact",act:"act.external",security:"security.inspect",verify:"verify.result"};
+const preferredTool:Partial<Record<NovaCapability,string>>={time:"time.now",research:"research.search",files:"files.inspect",vision:"vision.inspect",voice:"voice.process",memory:"memory.retrieve",build:"build.project",analyze:"analyze.data",create:"create.artifact",act:"act.external",security:"security.inspect",verify:"verify.result"};
 export function listNovaTools(){return[...registry.values()];}
 export function resolveNovaTool(capability:NovaCapability){const name=preferredTool[capability];return name?registry.get(name)||null:null;}
 export function createNovaExecutionPlan(decision:CapabilityDecision):NovaExecutionPlan{
