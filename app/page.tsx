@@ -996,6 +996,8 @@ function Home() {
       {settingsOpen&&<SettingsModal section={settingsSection} setSection={setSettingsSection} onClose={()=>setSettingsOpen(false)} />}
     </main>
   );
+}
+
 export default function Page() {
   return (
     <NovaRuntime>
