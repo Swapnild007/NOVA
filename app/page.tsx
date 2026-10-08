@@ -788,29 +788,6 @@ function Home() {
     document.documentElement.dataset.theme = stored;
   }, []);
 
-  useAuiEvent("composer.send", () => {
-    const current = loadUsage();
-    current.requests += 1;
-    saveUsage(current);
-  });
-
-  useAuiEvent("thread.runEnd", () => {
-    const lastAssistant = [...messages].reverse().find((message) => message.role === "assistant");
-    const lastUser = [...messages].reverse().find((message) => message.role === "user");
-    const output = lastAssistant?.content
-      .filter((part) => part.type === "text")
-      .map((part) => part.text)
-      .join("") || "";
-    const prompt = lastUser?.content
-      .filter((part) => part.type === "text")
-      .map((part) => part.text)
-      .join("") || "";
-    const current = loadUsage();
-    current.promptTokens += Math.max(1, Math.ceil(prompt.length / 4));
-    current.completionTokens += Math.max(1, Math.ceil(output.length / 4));
-    saveUsage(current);
-  });
-
   useEffect(() => {
     if (!menuOpen) return;
     const close = (event: MouseEvent) => {
