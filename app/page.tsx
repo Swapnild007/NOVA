@@ -831,6 +831,30 @@ function Home() {
   }, []);
 
   useEffect(() => {
+    const syncVirtualMobileViewport = () => {
+      const viewport = window.visualViewport;
+      const layoutWidth = window.innerWidth;
+      const visualWidth = viewport?.width || layoutWidth;
+      const virtualMobile = layoutWidth > 760 && layoutWidth <= 1100 && visualWidth < layoutWidth * 0.86;
+      const scale = virtualMobile ? Math.min(1.5, Math.max(1, layoutWidth / visualWidth)) : 1;
+
+      document.body.classList.toggle("nova-virtual-mobile", virtualMobile);
+      document.documentElement.style.setProperty("--nova-virtual-scale", scale.toFixed(3));
+    };
+
+    syncVirtualMobileViewport();
+    window.addEventListener("resize", syncVirtualMobileViewport);
+    window.visualViewport?.addEventListener("resize", syncVirtualMobileViewport);
+
+    return () => {
+      window.removeEventListener("resize", syncVirtualMobileViewport);
+      window.visualViewport?.removeEventListener("resize", syncVirtualMobileViewport);
+      document.body.classList.remove("nova-virtual-mobile");
+      document.documentElement.style.removeProperty("--nova-virtual-scale");
+    };
+  }, []);
+
+  useEffect(() => {
     const stored = (localStorage.getItem("nova-theme") as Theme) || "system";
     document.documentElement.dataset.theme = stored;
   }, []);
