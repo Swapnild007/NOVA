@@ -76,6 +76,7 @@ type UsagePayload = {
   completion_tokens?: number;
   total_tokens?: number;
   cost?: number;
+  source?: "provider" | "estimated";
 };
 
 type PendingAttachment = {
@@ -106,6 +107,14 @@ function recordUsage(payload: UsagePayload) {
     current.promptTokens += Number(payload.prompt_tokens || 0);
     current.completionTokens += Number(payload.completion_tokens || 0);
     current.cost += Number(payload.cost || 0);
+    const source = payload.source || "estimated";
+    current.providerRequests = Number(current.providerRequests || 0) + (source === "provider" ? 1 : 0);
+    current.estimatedRequests = Number(current.estimatedRequests || 0) + (source === "estimated" ? 1 : 0);
+    current.usageSource = current.providerRequests > 0 && current.estimatedRequests > 0
+      ? "mixed"
+      : current.providerRequests > 0
+        ? "provider"
+        : "estimated";
 
     localStorage.setItem("nova-usage", JSON.stringify(current));
     window.dispatchEvent(new Event("nova-usage-updated"));
@@ -251,6 +260,7 @@ const adapter: ChatModelAdapter = {
         completion_tokens: completionTokens,
         total_tokens: estimatedPromptTokens + completionTokens,
         cost: 0,
+        source: "estimated",
       });
       usageRecorded = true;
     };
@@ -290,7 +300,7 @@ const adapter: ChatModelAdapter = {
       const visibleText = fullText.slice(0, markerIndex);
       const usageText = fullText.slice(markerIndex + USAGE_MARKER.length).trim();
       try {
-        recordUsage(JSON.parse(usageText) as UsagePayload);
+        recordUsage({ ...(JSON.parse(usageText) as UsagePayload), source: "provider" });
         usageRecorded = true;
       } catch {
         // Fall back to deterministic local telemetry below.
