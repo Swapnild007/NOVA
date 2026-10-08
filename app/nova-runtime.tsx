@@ -234,6 +234,7 @@ const adapter: ChatModelAdapter = {
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let fullText = "";
+    let usageRecorded = false;
     const promptText = outgoingMessages
       .map((message) => typeof message.content === "string"
         ? message.content
@@ -243,6 +244,17 @@ const adapter: ChatModelAdapter = {
       .join("\n");
     const estimatedPromptTokens = Math.max(1, Math.ceil(promptText.length / 4));
 
+    const estimateUsage = () => {
+      const completionTokens = Math.max(1, Math.ceil(fullText.length / 4));
+      recordUsage({
+        prompt_tokens: estimatedPromptTokens,
+        completion_tokens: completionTokens,
+        total_tokens: estimatedPromptTokens + completionTokens,
+        cost: 0,
+      });
+      usageRecorded = true;
+    };
+
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
@@ -251,17 +263,19 @@ const adapter: ChatModelAdapter = {
 
       const markerIndex = fullText.indexOf(USAGE_MARKER);
       if (markerIndex >= 0) {
-        const visibleText = fullText.slice(0, markerIndex);
         const usageText = fullText.slice(markerIndex + USAGE_MARKER.length).trim();
         try {
-          recordUsage(JSON.parse(usageText) as UsagePayload);
+          const payload = JSON.parse(usageText) as UsagePayload;
+          recordUsage(payload);
+          usageRecorded = true;
+          const visibleText = fullText.slice(0, markerIndex);
+          if (visibleText) {
+            yield { content: [{ type: "text", text: visibleText }] };
+          }
+          return;
         } catch {
-          // Ignore malformed optional usage data.
+          // The usage JSON may be split across network chunks. Keep reading.
         }
-        if (visibleText) {
-          yield { content: [{ type: "text", text: visibleText }] };
-        }
-        return;
       }
 
       if (fullText) {
@@ -277,27 +291,19 @@ const adapter: ChatModelAdapter = {
       const usageText = fullText.slice(markerIndex + USAGE_MARKER.length).trim();
       try {
         recordUsage(JSON.parse(usageText) as UsagePayload);
+        usageRecorded = true;
       } catch {
-        // Ignore malformed optional usage data.
+        // Fall back to deterministic local telemetry below.
       }
       if (visibleText) {
         yield { content: [{ type: "text", text: visibleText }] };
       }
     } else if (fullText) {
-      recordUsage({
-        prompt_tokens: estimatedPromptTokens,
-        completion_tokens: Math.max(1, Math.ceil(fullText.length / 4)),
-        total_tokens: estimatedPromptTokens + Math.max(1, Math.ceil(fullText.length / 4)),
-        cost: 0,
-      });
       yield { content: [{ type: "text", text: fullText }] };
-    } else {
-      recordUsage({
-        prompt_tokens: estimatedPromptTokens,
-        completion_tokens: 1,
-        total_tokens: estimatedPromptTokens + 1,
-        cost: 0,
-      });
+    }
+
+    if (!usageRecorded) {
+      estimateUsage();
     }
   },
 };
