@@ -51,7 +51,7 @@ export async function POST(req:Request){
     }
     return new Response("NOVA could not resolve the requested date or time for this timezone.",{headers:{"Content-Type":"text/plain; charset=utf-8","Cache-Control":"no-cache, no-transform","X-NOVA-Intent":plan.intent,"X-NOVA-Provider":"native-time","X-NOVA-Shield":plan.shield.risk,"X-NOVA-Runtime":"enabled"}});
   }
-  const attempt=await requestNovaIntelligence(plan,{messages:[{role:"system",content:buildNovaSystem(plan,objective)+"\n"+localTime},...messages],stream:true,...(plan.useWeb?{tools:[{type:"openrouter:web_search"}],tool_choice:"auto",max_tool_calls:plan.deepResearch?6:2}: {})});
+  const attempt=await requestNovaIntelligence(plan,{messages:[{role:"system",content:buildNovaSystem(plan,objective,memory)+"\n"+localTime},...messages],stream:true,...(plan.useWeb?{tools:[{type:"openrouter:web_search"}],tool_choice:"auto",max_tool_calls:plan.deepResearch?6:2}: {})});
   if(!attempt)return new Response("NOVA has no configured intelligence provider. Add at least one direct provider key (Gemini, Mistral or Groq), or configure NOVA_GATEWAY_* as a fallback.",{status:503});
   if(!attempt.response.ok||!attempt.response.body){const d=await attempt.response.text().catch(()=>"");return new Response(failure(attempt.response.status,d,attempt.label),{status:200})}
   const contentType=attempt.response.headers.get("content-type")||"";
