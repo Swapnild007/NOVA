@@ -1,5 +1,5 @@
 import type { NovaCapability } from "./nova-capability";
-import { listNovaTools, resolveNovaTool } from "./nova-capability-runtime";
+import { resolveNovaTool } from "./nova-capability-runtime";
 
 export type NovaCapabilityStatus = "native" | "connected" | "optional" | "unavailable";
 export type NovaCapabilityPermission = "none" | "confirmation";
