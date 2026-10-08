@@ -1,19 +1,8 @@
 import type { NovaIntent } from "./nova-gateway";
 
 export type NovaCapability =
-  | "reason"
-  | "time"
-  | "research"
-  | "create"
-  | "analyze"
-  | "build"
-  | "files"
-  | "vision"
-  | "voice"
-  | "act"
-  | "memory"
-  | "security"
-  | "verify";
+  | "reason" | "time" | "weather" | "research" | "create" | "analyze" | "build"
+  | "files" | "vision" | "voice" | "act" | "memory" | "security" | "verify";
 
 export type CapabilityDecision = {
   primary: NovaCapability;
@@ -27,6 +16,8 @@ export type CapabilityDecision = {
 type Signal = { capability: NovaCapability; weight: number; reason: string };
 
 const rules: Array<{ pattern: RegExp; signals: Signal[] }> = [
+  { pattern: /\b(weather|forecast|temperature|rain|raining|humidity|wind|storm|sunny|cloudy)\b/i,
+    signals: [{ capability: "weather", weight: 12, reason: "current weather or forecast requested" }] },
   { pattern: /\b(what(?:\s+is|\x27s)?\s+(?:today(?:\x27s)?\s+)?(?:date|day|time)|today(?:\x27s)?\s+date|current\s+(?:date|time)|what\s+day\s+is\s+it|what\s+time\s+is\s+it|time\s+now|date\s+today)\b/i,
     signals: [{ capability: "time", weight: 10, reason: "native date or time requested" }] },
   { pattern: /\b(latest|current|recent|news|search|research|source|sources|website|online|internet|look up)\b/i,
@@ -50,18 +41,12 @@ const rules: Array<{ pattern: RegExp; signals: Signal[] }> = [
 ];
 
 const intentDefaults: Record<NovaIntent, NovaCapability> = {
-  general: "reason",
-  research: "research",
-  create: "create",
-  analyze: "analyze",
-  build: "build",
-  plan: "reason",
-  act: "act",
+  general: "reason", research: "research", create: "create", analyze: "analyze",
+  build: "build", plan: "reason", act: "act",
 };
 
 export function selectNovaCapabilities(text: string, intent: NovaIntent): CapabilityDecision {
   const scores = new Map<NovaCapability, { score: number; reasons: string[] }>();
-
   for (const rule of rules) {
     if (!rule.pattern.test(text)) continue;
     for (const signal of rule.signals) {
@@ -71,27 +56,16 @@ export function selectNovaCapabilities(text: string, intent: NovaIntent): Capabi
       scores.set(signal.capability, current);
     }
   }
-
   const primary = [...scores.entries()].sort((a, b) => b[1].score - a[1].score)[0]?.[0] || intentDefaults[intent];
-  const supporting = [...scores.entries()]
-    .filter(([capability]) => capability !== primary)
-    .sort((a, b) => b[1].score - a[1].score)
-    .slice(0, 3)
-    .map(([capability]) => capability);
-
+  const supporting = [...scores.entries()].filter(([capability]) => capability !== primary)
+    .sort((a, b) => b[1].score - a[1].score).slice(0, 3).map(([capability]) => capability);
   const requiresPermission = primary === "act" || supporting.includes("act");
-  const requiresExternalTool = ["research", "files", "vision", "voice", "act"].includes(primary) ||
-    supporting.some((capability) => ["research", "files", "vision", "voice", "act"].includes(capability));
-
+  const external = ["weather", "research", "files", "vision", "voice", "act"];
+  const requiresExternalTool = external.includes(primary) || supporting.some((capability) => external.includes(capability));
   const topScore = scores.get(primary)?.score || 1;
-  const confidence = Math.min(0.98, Math.max(0.55, 0.55 + topScore / 30));
-
   return {
-    primary,
-    supporting,
-    requiresPermission,
-    requiresExternalTool,
-    confidence,
+    primary, supporting, requiresPermission, requiresExternalTool,
+    confidence: Math.min(0.98, Math.max(0.55, 0.55 + topScore / 30)),
     rationale: scores.get(primary)?.reasons || ["intent default"],
   };
 }
