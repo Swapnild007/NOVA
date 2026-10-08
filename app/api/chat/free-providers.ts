@@ -265,11 +265,19 @@ export async function requestNovaIntelligence(
   body: Record<string, unknown>,
 ): Promise<NovaIntelligenceAttempt | null> {
   const ordered = orderForPlan(plan);
+  const requiresToolExecution = Array.isArray(body.tools) && body.tools.length > 0;
+
+  // Tool-backed capabilities must stay on a gateway that can execute the
+  // requested server tools. Direct providers intentionally strip tool fields,
+  // so sending a research request to them would create a false-success path.
+  const eligibleOrdered = requiresToolExecution
+    ? ordered.filter((id) => id === "gateway" || id === "omniroute")
+    : ordered;
 
   // Never hide a configured provider behind a cooldown. Cooldowns affect
   // ranking, but a configured provider remains an eligible last-resort
   // attempt when no healthy alternative exists.
-  const directIds = ordered.filter((id) => id !== "gateway" && id !== "omniroute");
+  const directIds = eligibleOrdered.filter((id) => id !== "gateway" && id !== "omniroute");
   const ranked = [...directIds].sort((a, b) => {
     const orderDelta = ordered.indexOf(a) - ordered.indexOf(b);
     const scoreDelta = providerScore(a, plan.intent) - providerScore(b, plan.intent);
@@ -278,7 +286,7 @@ export async function requestNovaIntelligence(
 
   let lastFailedAttempt: NovaIntelligenceAttempt | null = null;
 
-  for (const id of [...ranked, ...ordered.filter((id) => id === "gateway" || id === "omniroute")]) {
+  for (const id of [...ranked, ...eligibleOrdered.filter((id) => id === "gateway" || id === "omniroute")]) {
     if (id === "gateway" || id === "omniroute") {
       const gateway = id === "gateway" ? await callGateway(plan, body) : await callOmniRoute(plan, body);
       if (gateway?.response.ok) return gateway;
