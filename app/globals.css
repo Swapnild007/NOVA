@@ -281,10 +281,10 @@ h1 {
 
 .message {
   max-width: 780px;
-  margin: 12px 0;
-  padding: 18px 20px;
-  border-radius: 22px;
-  animation: messageIn .35s ease both;
+  margin: 10px 0;
+  padding: 14px 18px;
+  border-radius: 20px;
+  animation: messageIn .28s ease both;
 }
 
 .message-user {
@@ -328,9 +328,13 @@ h1 {
 
 .message-text {
   font-size: 15px;
-  line-height: 1.6;
+  line-height: 1.55;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
+}
+
+.message-assistant .message-text {
+  max-width: 74ch;
 }
 
 @keyframes messageIn {
@@ -610,8 +614,12 @@ h1 {
 
 .nova-markdown {
   color: inherit;
-  line-height: 1.65;
+  line-height: 1.55;
   overflow-wrap: anywhere;
+}
+
+.nova-markdown > * {
+  max-width: 74ch;
 }
 
 .nova-markdown > :first-child { margin-top: 0; }
@@ -621,7 +629,7 @@ h1 {
 .nova-markdown h2,
 .nova-markdown h3,
 .nova-markdown h4 {
-  margin: 1.15em 0 .45em;
+  margin: .85em 0 .35em;
   color: inherit;
   line-height: 1.2;
   letter-spacing: -.025em;
@@ -630,20 +638,20 @@ h1 {
 .nova-markdown h1 { font-size: 1.45em; }
 .nova-markdown h2 { font-size: 1.25em; }
 .nova-markdown h3 { font-size: 1.08em; }
-.nova-markdown p { margin: .7em 0; }
+.nova-markdown p { margin: .52em 0; }
 .nova-markdown ul,
-.nova-markdown ol { margin: .7em 0; padding-left: 1.45em; }
-.nova-markdown li { margin: .3em 0; }
+.nova-markdown ol { margin: .52em 0; padding-left: 1.35em; }
+.nova-markdown li { margin: .18em 0; }
 
 .nova-markdown blockquote {
-  margin: .9em 0;
+  margin: .7em 0;
   padding: .15em 0 .15em 1em;
   border-left: 3px solid var(--line);
   color: var(--muted);
 }
 
 .nova-markdown hr {
-  margin: 1.25em 0;
+  margin: .95em 0;
   border: 0;
   border-top: 1px solid var(--line);
 }
@@ -666,7 +674,7 @@ h1 {
 }
 
 .nova-markdown pre {
-  margin: .9em 0;
+  margin: .7em 0;
   padding: 14px 16px;
   overflow-x: auto;
   border-radius: 14px;
@@ -682,7 +690,7 @@ h1 {
 
 .nova-markdown table {
   width: 100%;
-  margin: 1em 0;
+  margin: .7em 0;
   border-collapse: collapse;
   display: block;
   overflow-x: auto;
@@ -691,7 +699,7 @@ h1 {
 
 .nova-markdown th,
 .nova-markdown td {
-  padding: 9px 11px;
+  padding: 7px 9px;
   border: 1px solid var(--line);
   text-align: left;
   vertical-align: top;
@@ -1145,8 +1153,18 @@ h1 {
   .thread-viewport { padding-bottom: 8px; }
   .composer { border-radius: 23px; }
   .composer-input { min-height: 68px; font-size: 16px; }
-  .message { padding: 15px 16px; border-radius: 19px; }
-  .message-text { font-size: 14px; }
+  .message { margin: 8px 0; padding: 12px 14px; border-radius: 18px; }
+  .message-text { font-size: 14px; line-height: 1.52; }
+  .message-assistant .message-text { max-width: none; }
+  .nova-markdown { line-height: 1.52; }
+  .nova-markdown p { margin: .45em 0; }
+  .nova-markdown h1,
+  .nova-markdown h2,
+  .nova-markdown h3,
+  .nova-markdown h4 { margin: .72em 0 .3em; }
+  .nova-markdown table { font-size: .88em; }
+  .nova-markdown th,
+  .nova-markdown td { min-width: 108px; padding: 6px 8px; }
   .footer { display: none; }
   .new-chat-button { display: none; }
   .settings-backdrop { padding: 0; align-items: stretch; }
