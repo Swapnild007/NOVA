@@ -1,7 +1,7 @@
 import type { NovaGatewayPlan } from "./nova-gateway";
 import { getNovaCapabilityScore } from "./model-capabilities";
 
-type ProviderId = "gemini" | "mistral" | "groq" | "gateway";
+type ProviderId = "gemini" | "mistral" | "groq" | "gateway" | "omniroute";
 
 export type NovaIntelligenceAttempt = {
   source: "direct" | "gateway";
@@ -59,11 +59,11 @@ function recordProviderResult(id: ProviderId, ok: boolean, latencyMs: number) {
   state.cooldownUntil = Date.now() + Math.min(60000, 5000 * 2 ** Math.min(state.failures - 1, 3));
 }
 
-function providerScore(id: ProviderId, intent: NovaGatewayPlan["intent"]) {
+function providerScore(id: Exclude<ProviderId, "gateway" | "omniroute">, intent: NovaGatewayPlan["intent"]) {
   const state = healthFor(id);
   return state.cooldownUntil > Date.now() ? Number.POSITIVE_INFINITY :
     state.latencyMs + state.failures * 5000 - Math.min(state.successes, 5) * 100 -
-    (id === "gateway" ? 0 : getNovaCapabilityScore(id, intent) * 100);
+    getNovaCapabilityScore(id, intent) * 100;
 }
 
 const providers: ProviderConfig[] = [
@@ -101,18 +101,18 @@ function orderForPlan(plan: NovaGatewayPlan) {
   }
 
   const defaults: Record<NovaGatewayPlan["intent"], ProviderId[]> = {
-    general: ["gemini", "groq", "mistral", "gateway"],
-    research: ["gemini", "mistral", "groq", "gateway"],
-    create: ["gemini", "mistral", "groq", "gateway"],
-    analyze: ["gemini", "mistral", "groq", "gateway"],
-    build: ["gemini", "groq", "mistral", "gateway"],
-    plan: ["gemini", "mistral", "groq", "gateway"],
-    act: ["gemini", "groq", "mistral", "gateway"],
+    general: ["gemini", "groq", "mistral", "gateway", "omniroute"],
+    research: ["gemini", "mistral", "groq", "gateway", "omniroute"],
+    create: ["gemini", "mistral", "groq", "gateway", "omniroute"],
+    analyze: ["gemini", "mistral", "groq", "gateway", "omniroute"],
+    build: ["gemini", "groq", "mistral", "gateway", "omniroute"],
+    plan: ["gemini", "mistral", "groq", "gateway", "omniroute"],
+    act: ["gemini", "groq", "mistral", "gateway", "omniroute"],
   };
   return defaults[plan.intent];
 }
 
-function providerConfig(id: Exclude<ProviderId, "gateway">) {
+function providerConfig(id: Exclude<ProviderId, "gateway" | "omniroute">) {
   return providers.find((provider) => provider.id === id) || null;
 }
 
@@ -196,6 +196,30 @@ async function callDirectProvider(
   };
 }
 
+async function callOmniRoute(plan: NovaGatewayPlan, body: Record<string, unknown>) {
+  const base = (env("NOVA_OMNIROUTE_URL") || "").replace(/\/+$/, "");
+  const key = env("NOVA_OMNIROUTE_API_KEY");
+  const model = env("NOVA_OMNIROUTE_MODEL");
+  if (!base || !model) return null;
+
+  try {
+    const response = await fetch(base + "/chat/completions", {
+      method: "POST",
+      headers: {
+        ...(key ? { Authorization: "Bearer " + key } : {}),
+        "Content-Type": "application/json",
+        Accept: "text/event-stream",
+      },
+      body: JSON.stringify({ ...directBody(body), model }),
+      cache: "no-store",
+      signal: AbortSignal.timeout(Number(env("NOVA_OMNIROUTE_TIMEOUT_MS") || 45000)),
+    });
+    return { source: "gateway" as const, label: "OmniRoute", model, response };
+  } catch (error) {
+    return { source: "gateway" as const, label: "OmniRoute", model, response: transportFailure(error) };
+  }
+}
+
 async function callGateway(plan: NovaGatewayPlan, body: Record<string, unknown>) {
   const base = (env("NOVA_GATEWAY_URL") || (env("OPENROUTER_API_KEY") ? "https://openrouter.ai/api/v1" : "")).replace(/\/+$/, "");
   const key = env("NOVA_GATEWAY_API_KEY") || env("OPENROUTER_API_KEY");
@@ -245,7 +269,7 @@ export async function requestNovaIntelligence(
   // Never hide a configured provider behind a cooldown. Cooldowns affect
   // ranking, but a configured provider remains an eligible last-resort
   // attempt when no healthy alternative exists.
-  const directIds = ordered.filter((id) => id !== "gateway");
+  const directIds = ordered.filter((id) => id !== "gateway" && id !== "omniroute");
   const ranked = [...directIds].sort((a, b) => {
     const orderDelta = ordered.indexOf(a) - ordered.indexOf(b);
     const scoreDelta = providerScore(a, plan.intent) - providerScore(b, plan.intent);
@@ -254,9 +278,9 @@ export async function requestNovaIntelligence(
 
   let lastFailedAttempt: NovaIntelligenceAttempt | null = null;
 
-  for (const id of [...ranked, ...ordered.filter((id) => id === "gateway")]) {
-    if (id === "gateway") {
-      const gateway = await callGateway(plan, body);
+  for (const id of [...ranked, ...ordered.filter((id) => id === "gateway" || id === "omniroute")]) {
+    if (id === "gateway" || id === "omniroute") {
+      const gateway = id === "gateway" ? await callGateway(plan, body) : await callOmniRoute(plan, body);
       if (gateway?.response.ok) return gateway;
       if (gateway) lastFailedAttempt = gateway;
       if (gateway && gateway.response.status !== 429 && gateway.response.status < 500) return gateway;
@@ -296,16 +320,21 @@ export async function requestNovaIntelligence(
 export function getConfiguredNovaProviders() {
   const ids = env("NOVA_PROVIDER_ORDER")
     ? env("NOVA_PROVIDER_ORDER")!.split(",").map((x) => x.trim().toLowerCase()).filter(Boolean) as ProviderId[]
-    : ["gemini", "mistral", "groq", "gateway"] as ProviderId[];
+    : ["gemini", "mistral", "groq", "gateway", "omniroute"] as ProviderId[];
 
   return ids
-    .map((id) => id === "gateway" ? "NOVA Gateway" : providerConfig(id))
-    .filter((provider): provider is ProviderConfig | "NOVA Gateway" =>
-      provider === "NOVA Gateway" || Boolean(provider && hasDirectProvider(provider))
+    .map((id) => {
+      if (id === "gateway") return "NOVA Gateway";
+      if (id === "omniroute") {
+        return env("NOVA_OMNIROUTE_URL") && env("NOVA_OMNIROUTE_MODEL") ? "OmniRoute" : null;
+      }
+      return providerConfig(id);
+    })
+    .filter((provider): provider is ProviderConfig | "NOVA Gateway" | "OmniRoute" =>
+      provider === "NOVA Gateway" || provider === "OmniRoute" || Boolean(provider && hasDirectProvider(provider))
     )
     .map((provider) => typeof provider === "string" ? provider : provider.label);
 }
-
 
 export type NovaProviderCapability = {
   id: ProviderId;
@@ -316,7 +345,7 @@ export type NovaProviderCapability = {
 };
 
 export function getNovaProviderCapabilities(): NovaProviderCapability[] {
-  const ids: ProviderId[] = ["gemini", "groq", "mistral", "gateway"];
+  const ids: ProviderId[] = ["gemini", "groq", "mistral", "gateway", "omniroute"];
   return ids.map((id) => {
     if (id === "gateway") {
       return {
@@ -324,6 +353,16 @@ export function getNovaProviderCapabilities(): NovaProviderCapability[] {
         label: "NOVA Gateway",
         configured: Boolean((env("NOVA_GATEWAY_URL") && env("NOVA_GATEWAY_API_KEY")) || env("OPENROUTER_API_KEY")),
         model: env("NOVA_GATEWAY_MODEL") || (env("OPENROUTER_API_KEY") ? "openrouter/free" : null),
+        role: "gateway",
+      };
+    }
+
+    if (id === "omniroute") {
+      return {
+        id,
+        label: "OmniRoute",
+        configured: Boolean(env("NOVA_OMNIROUTE_URL") && env("NOVA_OMNIROUTE_MODEL")),
+        model: env("NOVA_OMNIROUTE_MODEL") || null,
         role: "gateway",
       };
     }
