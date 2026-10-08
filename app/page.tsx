@@ -294,8 +294,11 @@ function loadUsage() {
           promptTokens: number;
           completionTokens: number;
           cost: number;
+          providerRequests?: number;
+          estimatedRequests?: number;
+          usageSource?: "provider" | "estimated" | "mixed";
         }
-      : { requests: 0, promptTokens: 0, completionTokens: 0, cost: 0 };
+: { requests: 0, promptTokens: 0, completionTokens: 0, cost: 0, providerRequests: 0, estimatedRequests: 0, usageSource: "estimated" };
   } catch {
     return { requests: 0, promptTokens: 0, completionTokens: 0, cost: 0 };
   }
@@ -599,7 +602,21 @@ function SettingsModal({
               <SettingRow title="API key" description="Secret stays on the server. NOVA never exposes the key to the browser." value="">
                 <span className="status-pill">Server-side</span>
               </SettingRow>
-              <p className="settings-note">Usage values are collected from the model response when the provider returns accounting data. Your secret key is never displayed here.</p>
+              <div className="usage-source">
+                <span className="settings-note">
+                  {usage.usageSource === "provider"
+                    ? "Provider-reported usage"
+                    : usage.usageSource === "mixed"
+                      ? "Mixed: provider-reported and estimated usage"
+                      : "Estimated usage"}
+                </span>
+                <span className="status-pill">
+                  {usage.usageSource === "provider" ? "Reported" : usage.usageSource === "mixed" ? "Mixed" : "Estimated"}
+                </span>
+              </div>
+              <p className="settings-note">
+                Provider-reported usage is used when the model supplies accounting data. Otherwise NOVA estimates tokens locally. Estimates are not billing data. Your secret key is never displayed here.
+              </p>
             </div>
           )}
 
@@ -787,29 +804,6 @@ function Home() {
     const stored = (localStorage.getItem("nova-theme") as Theme) || "system";
     document.documentElement.dataset.theme = stored;
   }, []);
-
-  useAuiEvent("composer.send", () => {
-    const current = loadUsage();
-    current.requests += 1;
-    saveUsage(current);
-  });
-
-  useAuiEvent("thread.runEnd", () => {
-    const lastAssistant = [...messages].reverse().find((message) => message.role === "assistant");
-    const lastUser = [...messages].reverse().find((message) => message.role === "user");
-    const output = lastAssistant?.content
-      .filter((part) => part.type === "text")
-      .map((part) => part.text)
-      .join("") || "";
-    const prompt = lastUser?.content
-      .filter((part) => part.type === "text")
-      .map((part) => part.text)
-      .join("") || "";
-    const current = loadUsage();
-    current.promptTokens += Math.max(1, Math.ceil(prompt.length / 4));
-    current.completionTokens += Math.max(1, Math.ceil(output.length / 4));
-    saveUsage(current);
-  });
 
   useEffect(() => {
     if (!menuOpen) return;

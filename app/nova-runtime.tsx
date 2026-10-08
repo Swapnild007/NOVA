@@ -76,6 +76,7 @@ type UsagePayload = {
   completion_tokens?: number;
   total_tokens?: number;
   cost?: number;
+  source?: "provider" | "estimated";
 };
 
 type PendingAttachment = {
@@ -99,13 +100,24 @@ function recordUsage(payload: UsagePayload) {
           promptTokens: number;
           completionTokens: number;
           cost: number;
+          providerRequests?: number;
+          estimatedRequests?: number;
+          usageSource?: "provider" | "estimated" | "mixed";
         }
-      : { requests: 0, promptTokens: 0, completionTokens: 0, cost: 0 };
+      : { requests: 0, promptTokens: 0, completionTokens: 0, cost: 0, providerRequests: 0, estimatedRequests: 0, usageSource: "estimated" };
 
     current.requests += 1;
     current.promptTokens += Number(payload.prompt_tokens || 0);
     current.completionTokens += Number(payload.completion_tokens || 0);
     current.cost += Number(payload.cost || 0);
+    const source = payload.source || "estimated";
+    current.providerRequests = Number(current.providerRequests || 0) + (source === "provider" ? 1 : 0);
+    current.estimatedRequests = Number(current.estimatedRequests || 0) + (source === "estimated" ? 1 : 0);
+    current.usageSource = current.providerRequests > 0 && current.estimatedRequests > 0
+      ? "mixed"
+      : current.providerRequests > 0
+        ? "provider"
+        : "estimated";
 
     localStorage.setItem("nova-usage", JSON.stringify(current));
     window.dispatchEvent(new Event("nova-usage-updated"));
@@ -234,6 +246,27 @@ const adapter: ChatModelAdapter = {
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let fullText = "";
+    let usageRecorded = false;
+    const promptText = outgoingMessages
+      .map((message) => typeof message.content === "string"
+        ? message.content
+        : Array.isArray(message.content)
+          ? message.content.filter((part: any) => part?.type === "text").map((part: any) => part.text || "").join("")
+          : "")
+      .join("\n");
+    const estimatedPromptTokens = Math.max(1, Math.ceil(promptText.length / 4));
+
+    const estimateUsage = () => {
+      const completionTokens = Math.max(1, Math.ceil(fullText.length / 4));
+      recordUsage({
+        prompt_tokens: estimatedPromptTokens,
+        completion_tokens: completionTokens,
+        total_tokens: estimatedPromptTokens + completionTokens,
+        cost: 0,
+        source: "estimated",
+      });
+      usageRecorded = true;
+    };
 
     while (true) {
       const { done, value } = await reader.read();
@@ -243,17 +276,19 @@ const adapter: ChatModelAdapter = {
 
       const markerIndex = fullText.indexOf(USAGE_MARKER);
       if (markerIndex >= 0) {
-        const visibleText = fullText.slice(0, markerIndex);
         const usageText = fullText.slice(markerIndex + USAGE_MARKER.length).trim();
         try {
-          recordUsage(JSON.parse(usageText) as UsagePayload);
+          const payload = JSON.parse(usageText) as UsagePayload;
+          recordUsage(payload);
+          usageRecorded = true;
+          const visibleText = fullText.slice(0, markerIndex);
+          if (visibleText) {
+            yield { content: [{ type: "text", text: visibleText }] };
+          }
+          return;
         } catch {
-          // Ignore malformed optional usage data.
+          // The usage JSON may be split across network chunks. Keep reading.
         }
-        if (visibleText) {
-          yield { content: [{ type: "text", text: visibleText }] };
-        }
-        return;
       }
 
       if (fullText) {
@@ -268,15 +303,20 @@ const adapter: ChatModelAdapter = {
       const visibleText = fullText.slice(0, markerIndex);
       const usageText = fullText.slice(markerIndex + USAGE_MARKER.length).trim();
       try {
-        recordUsage(JSON.parse(usageText) as UsagePayload);
+        recordUsage({ ...(JSON.parse(usageText) as UsagePayload), source: "provider" });
+        usageRecorded = true;
       } catch {
-        // Ignore malformed optional usage data.
+        // Fall back to deterministic local telemetry below.
       }
       if (visibleText) {
         yield { content: [{ type: "text", text: visibleText }] };
       }
     } else if (fullText) {
       yield { content: [{ type: "text", text: fullText }] };
+    }
+
+    if (!usageRecorded) {
+      estimateUsage();
     }
   },
 };
