@@ -1,6 +1,7 @@
 import {buildNovaSystem,createNovaPlan,prepareNovaMessages} from "./nova-gateway";
 import {requestNovaIntelligence} from "./intelligence-gateway";
-import {executeNovaCapability} from "./nova-capability-runtime";
+import {createNovaExecutionPlan} from "./nova-capability-runtime";
+import {runNovaCapability} from "./nova-execution-runner";
 import {selectNovaCapabilities} from "./nova-capability";
 export const runtime="nodejs"; export const dynamic="force-dynamic";
 type Msg={role:"user"|"assistant"|"system";content:any};
@@ -23,8 +24,10 @@ export async function POST(req:Request){
     if(!location){
       return new Response("Which city or location should I check the weather for?",{headers:{"Content-Type":"text/plain; charset=utf-8","Cache-Control":"no-cache, no-transform","X-NOVA-Intent":plan.intent,"X-NOVA-Provider":"native-weather","X-NOVA-Shield":plan.shield.risk,"X-NOVA-Runtime":"enabled"}});
     }
-    const result=await executeNovaCapability("weather.current",{objective,input:location});
-    if(result.ok&&result.verified){
+    const executionPlan=createNovaExecutionPlan(capability);
+    const execution=await runNovaCapability(capability,executionPlan,{objective,input:location});
+    const result=execution.result;
+    if(execution.record.state==="completed"&&result.ok&&result.verified){
       const data=result.output as any;
       const current=data.weather.current;
       const daily=data.weather.daily;
@@ -37,8 +40,10 @@ export async function POST(req:Request){
     return new Response("NOVA could not retrieve verified weather data for "+location+".",{headers:{"Content-Type":"text/plain; charset=utf-8","Cache-Control":"no-cache, no-transform","X-NOVA-Intent":plan.intent,"X-NOVA-Provider":"native-weather","X-NOVA-Shield":plan.shield.risk,"X-NOVA-Runtime":"enabled"}});
   }
   if(capability.primary==="time"){
-    const result=await executeNovaCapability("time.now",{objective,input:timezone});
-    if(result.ok&&result.verified){
+    const executionPlan=createNovaExecutionPlan(capability);
+    const execution=await runNovaCapability(capability,executionPlan,{objective,input:timezone});
+    const result=execution.result;
+    if(execution.record.state==="completed"&&result.ok&&result.verified){
       const local=String((result.output as {local?:string})?.local||"");
       const text=local?("Today is "+local.split(" at ")[0]+"."):"NOVA could not resolve the requested date/time.";
       return new Response(text,{headers:{"Content-Type":"text/plain; charset=utf-8","Cache-Control":"no-cache, no-transform","X-NOVA-Intent":plan.intent,"X-NOVA-Provider":"native-time","X-NOVA-Shield":plan.shield.risk,"X-NOVA-Runtime":"enabled"}});
