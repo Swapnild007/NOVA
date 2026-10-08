@@ -17,6 +17,25 @@ export async function POST(req:Request){
   try{const now=new Date();const formatted=new Intl.DateTimeFormat("en-IN",{timeZone:timezone,dateStyle:"full",timeStyle:"long"}).format(now);localTime=`The user's local date and time is ${formatted} (${timezone}). Use this for date/time questions.`}catch{localTime="The user's local date and time could not be resolved; do not guess it."}
   const plan=createNovaPlan(valid),messages=prepareNovaMessages(valid,plan.contextMessages),objective=textOf(messages.filter(m=>m.role==="user").at(-1)?.content);
   const capability=selectNovaCapabilities(objective,plan.intent);
+  if(capability.primary==="weather"){
+    const locationMatch=objective.match(/\\b(?:weather|forecast|temperature|rain|raining|humidity|wind|storm|sunny|cloudy)\\s+(?:in|for|at)\\s+(.+?)(?:[?.!]?$)/i);
+    const location=locationMatch?.[1]?.trim().replace(/[?.!]$/,"")||"";
+    if(!location){
+      return new Response("Which city or location should I check the weather for?",{headers:{"Content-Type":"text/plain; charset=utf-8","Cache-Control":"no-cache, no-transform","X-NOVA-Intent":plan.intent,"X-NOVA-Provider":"native-weather","X-NOVA-Shield":plan.shield.risk,"X-NOVA-Runtime":"enabled"}});
+    }
+    const result=await executeNovaCapability("weather.current",{objective,input:location});
+    if(result.ok&&result.verified){
+      const data=result.output as any;
+      const current=data.weather.current;
+      const daily=data.weather.daily;
+      const code=Number(current.weather_code);
+      const labels:Record<number,string>={0:"clear sky",1:"mainly clear",2:"partly cloudy",3:"overcast",45:"foggy",48:"foggy",51:"light drizzle",53:"drizzle",55:"heavy drizzle",61:"light rain",63:"rain",65:"heavy rain",71:"light snow",73:"snow",75:"heavy snow",80:"rain showers",81:"rain showers",82:"heavy rain showers",95:"thunderstorm",96:"thunderstorm",99:"thunderstorm"};
+      const place=data.place.name+(data.place.country?", "+data.place.country:"");
+      const text="Weather in "+place+": "+Math.round(Number(current.temperature_2m))+"°C, "+(labels[code]||"current conditions")+". Feels like "+Math.round(Number(current.apparent_temperature))+"°C, humidity "+Math.round(Number(current.relative_humidity_2m))+"%, wind "+Math.round(Number(current.wind_speed_10m))+" km/h. Today's high is "+Math.round(Number(daily.temperature_2m_max?.[0]))+"°C and low "+Math.round(Number(daily.temperature_2m_min?.[0]))+"°C, with "+Math.round(Number(daily.precipitation_probability_max?.[0]||0))+"% precipitation probability.");
+      return new Response(text,{headers:{"Content-Type":"text/plain; charset=utf-8","Cache-Control":"no-cache, no-transform","X-NOVA-Intent":plan.intent,"X-NOVA-Provider":"native-weather","X-NOVA-Shield":plan.shield.risk,"X-NOVA-Runtime":"enabled"}});
+    }
+    return new Response("NOVA could not retrieve verified weather data for "+location+".",{headers:{"Content-Type":"text/plain; charset=utf-8","Cache-Control":"no-cache, no-transform","X-NOVA-Intent":plan.intent,"X-NOVA-Provider":"native-weather","X-NOVA-Shield":plan.shield.risk,"X-NOVA-Runtime":"enabled"}});
+  }
   if(capability.primary==="time"){
     const result=await executeNovaCapability("time.now",{objective,input:timezone});
     if(result.ok&&result.verified){
