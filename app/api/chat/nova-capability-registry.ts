@@ -108,6 +108,5 @@ export function buildCapabilityRegistryInstruction() {
         "permission=" + entry.permission, "execution=" + entry.executionRule].join(" | "),
     ),
     "Treat registry status as authoritative for capability availability.",
-  ].join("
-");
+  ].join("\n");
 }
