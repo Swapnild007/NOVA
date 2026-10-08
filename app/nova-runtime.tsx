@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { mergeNovaMemory, sanitizeNovaMemory, type NovaMemoryItem } from "./api/chat/nova-memory";
 
 import {
   AssistantRuntimeProvider,
@@ -10,6 +11,8 @@ import {
 } from "@assistant-ui/react";
 
 const USAGE_MARKER = "__NOVA_USAGE__";
+const MEMORY_MARKER = "__NOVA_MEMORY__";
+const MEMORY_KEY = "nova-memory-v1";
 
 const CHAT_HISTORY_KEY = "nova-chat-history-v1";
 const ACTIVE_CHAT_KEY = "nova-active-chat-id";
@@ -26,6 +29,36 @@ type PersistedChat = {
     createdAt: string;
   }>;
 };
+
+function readNovaMemory(): NovaMemoryItem[] {
+  try {
+    const raw = localStorage.getItem(MEMORY_KEY);
+    return sanitizeNovaMemory(raw ? JSON.parse(raw) : []);
+  } catch {
+    return [];
+  }
+}
+
+function saveNovaMemoryFromText(text: string) {
+  const markerIndex = text.indexOf(MEMORY_MARKER);
+  if (markerIndex < 0) return;
+  const tail = text.slice(markerIndex + MEMORY_MARKER.length);
+  const usageIndex = tail.indexOf(USAGE_MARKER);
+  const payloadText = (usageIndex >= 0 ? tail.slice(0, usageIndex) : tail).trim();
+  try {
+    const proposed = JSON.parse(payloadText);
+    const merged = mergeNovaMemory(readNovaMemory(), proposed);
+    localStorage.setItem(MEMORY_KEY, JSON.stringify(merged));
+    window.dispatchEvent(new Event("nova-memory-updated"));
+  } catch {
+    // Memory is optional telemetry/state. Never break a conversation because parsing failed.
+  }
+}
+
+function visibleNovaText(text: string) {
+  const markerIndex = text.indexOf(MEMORY_MARKER);
+  return markerIndex >= 0 ? text.slice(0, markerIndex) : text;
+}
 
 function getActiveChatId() {
   return localStorage.getItem(ACTIVE_CHAT_KEY) || "chat-" + Date.now().toString(36);
@@ -156,6 +189,7 @@ function textFromDataUrl(dataUrl: string) {
 const adapter: ChatModelAdapter = {
   async *run({ messages, abortSignal }) {
     const pendingAttachment = getPendingAttachment();
+    const memory = readNovaMemory();
 
     const outgoingMessages = messages.map((message, index) => {
       const text = message.content
@@ -225,6 +259,7 @@ const adapter: ChatModelAdapter = {
       body: JSON.stringify({
         messages: outgoingMessages,
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        memory,
       }),
       signal: abortSignal,
     }).catch((error) => new Response(
@@ -274,6 +309,7 @@ const adapter: ChatModelAdapter = {
 
       fullText += decoder.decode(value, { stream: true });
 
+      saveNovaMemoryFromText(fullText);
       const markerIndex = fullText.indexOf(USAGE_MARKER);
       if (markerIndex >= 0) {
         const usageText = fullText.slice(markerIndex + USAGE_MARKER.length).trim();
@@ -281,7 +317,7 @@ const adapter: ChatModelAdapter = {
           const payload = JSON.parse(usageText) as UsagePayload;
           recordUsage(payload);
           usageRecorded = true;
-          const visibleText = fullText.slice(0, markerIndex);
+          const visibleText = visibleNovaText(fullText.slice(0, markerIndex));
           if (visibleText) {
             yield { content: [{ type: "text", text: visibleText }] };
           }
@@ -292,15 +328,16 @@ const adapter: ChatModelAdapter = {
       }
 
       if (fullText) {
-        yield { content: [{ type: "text", text: fullText }] };
+        yield { content: [{ type: "text", text: visibleNovaText(fullText) }] };
       }
     }
 
     fullText += decoder.decode();
+    saveNovaMemoryFromText(fullText);
 
     const markerIndex = fullText.indexOf(USAGE_MARKER);
     if (markerIndex >= 0) {
-      const visibleText = fullText.slice(0, markerIndex);
+      const visibleText = visibleNovaText(fullText.slice(0, markerIndex));
       const usageText = fullText.slice(markerIndex + USAGE_MARKER.length).trim();
       try {
         recordUsage({ ...(JSON.parse(usageText) as UsagePayload), source: "provider" });
@@ -312,7 +349,7 @@ const adapter: ChatModelAdapter = {
         yield { content: [{ type: "text", text: visibleText }] };
       }
     } else if (fullText) {
-      yield { content: [{ type: "text", text: fullText }] };
+      yield { content: [{ type: "text", text: visibleNovaText(fullText) }] };
     }
 
     if (!usageRecorded) {
