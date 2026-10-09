@@ -1591,3 +1591,87 @@ button {
     opacity: .9;
   }
 }
+
+
+/* Mobile chat ergonomics: keep the composer compact, keyboard-friendly,
+   and visually integrated with the existing NOVA surface. */
+.composer:focus-within {
+  border-color: color-mix(in srgb, var(--ink) 24%, var(--line));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ink) 5%, transparent), var(--shadow);
+}
+
+.composer-input:focus,
+.composer-input:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+@media (max-width: 640px) {
+  .nova-shell {
+    overflow: clip;
+  }
+
+  .workspace {
+    width: calc(100% - 28px);
+    padding-top: 12px;
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
+  }
+
+  .thread-viewport {
+    padding: 4px 1px 10px;
+    scroll-padding-bottom: 14px;
+  }
+
+  .composer {
+    margin-top: 6px;
+    padding: 8px;
+    border-radius: 23px;
+  }
+
+  .composer-input {
+    min-height: 52px;
+    max-height: min(28dvh, 180px);
+    padding: 10px 11px 7px;
+    font-size: 16px;
+    line-height: 1.45;
+  }
+
+  .composer-footer {
+    padding: 5px 2px 1px 4px;
+  }
+
+  .tool-button,
+  .stop-button {
+    width: 40px;
+    height: 40px;
+  }
+
+  .send-button {
+    width: 48px;
+    height: 48px;
+  }
+
+  .thread-footer {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .has-chat .thread-viewport {
+    scroll-behavior: smooth;
+  }
+}
+
+@media (max-height: 740px) and (max-width: 640px) {
+  .composer-input {
+    min-height: 44px;
+    max-height: 22dvh;
+  }
+
+  .composer {
+    border-radius: 20px;
+  }
+
+  .message {
+    margin: 7px 0;
+    padding: 12px 13px;
+  }
+}
