@@ -1523,3 +1523,71 @@ h1 {
     padding: 7px 10px;
   }
 }
+
+
+/* Command Center foundation: polish the existing NOVA workspace without
+   introducing duplicate capability cards or changing its visual identity. */
+:where(button, input, textarea, select, iframe, a):focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--ink) 62%, transparent);
+  outline-offset: 3px;
+}
+
+button {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.composer-input {
+  scroll-margin-block: 24px;
+}
+
+.thread-viewport {
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.message,
+.project-artifact,
+.settings-modal,
+.history-panel {
+  min-width: 0;
+}
+
+@media (max-width: 640px) {
+  .nova-shell {
+    min-height: 100svh;
+    min-height: 100dvh;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .workspace {
+    padding-bottom: max(68px, calc(52px + env(safe-area-inset-bottom)));
+  }
+
+  .composer {
+    box-shadow: 0 8px 28px rgba(20, 24, 34, .08);
+  }
+
+  .composer-input {
+    max-height: min(32svh, 240px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .topbar-actions {
+    gap: 6px;
+  }
+
+  .thread-viewport {
+    scrollbar-width: thin;
+  }
+}
+
+@media (hover: none) {
+  .message-actions {
+    opacity: 1;
+  }
+
+  .history-item-actions button {
+    opacity: .9;
+  }
+}
